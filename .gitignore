@@ -1,0 +1,20 @@
+# Build folders
+build/
+bin/
+out/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# VS / VSCode
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+*.filters
+
+# OS junk
+.DS_Store
+Thumbs.db
