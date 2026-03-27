@@ -17,24 +17,62 @@
 #include <vector>
 #include <map>
 #include <cmath>
-#include <windows.h>
 #include <string>
 
-HANDLE initSerialPort(const char* portName) {
-    HANDLE hSerial = CreateFileA(portName, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    if (hSerial == INVALID_HANDLE_VALUE) return hSerial;
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <cstring>
 
-    DCB dcbSerialParams = {0};
-    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-    GetCommState(hSerial, &dcbSerialParams);
+int initSerialPort(const char* portName) {
+    int serial_port = open(portName, O_RDWR);
+    if (serial_port < 0) {
+        std::cerr << "Error opening serial port: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    struct termios tty;
+    if(tcgetattr(serial_port, &tty) != 0) {
+        std::cerr << "Error getting serial attributes." << std::endl;
+        return -1;
+    }
+
+    // Configure 8N1 (8 bits, No parity, 1 Stop bit)
+    tty.c_cflag &= ~PARENB; 
+    tty.c_cflag &= ~CSTOPB; 
+    tty.c_cflag &= ~CSIZE; 
+    tty.c_cflag |= CS8; 
     
-    dcbSerialParams.BaudRate = CBR_115200; 
-    dcbSerialParams.ByteSize = 8;
-    dcbSerialParams.StopBits = ONESTOPBIT;
-    dcbSerialParams.Parity   = NOPARITY;
-    
-    SetCommState(hSerial, &dcbSerialParams);
-    return hSerial;
+    // Disable hardware flow control
+    tty.c_cflag &= ~CRTSCTS; 
+    tty.c_cflag |= CREAD | CLOCAL;
+
+    // Disable special character processing (raw mode)
+    tty.c_lflag &= ~ICANON;
+    tty.c_lflag &= ~ECHO; 
+    tty.c_lflag &= ~ECHOE; 
+    tty.c_lflag &= ~ECHONL; 
+    tty.c_lflag &= ~ISIG; 
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY); 
+    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL); 
+    tty.c_oflag &= ~OPOST; 
+    tty.c_oflag &= ~ONLCR; 
+
+    // Set timeout to 1 second
+    tty.c_cc[VTIME] = 10; 
+    tty.c_cc[VMIN] = 0;
+
+    // Set Baud Rate to 115200
+    cfsetispeed(&tty, B115200);
+    cfsetospeed(&tty, B115200);
+
+    // Save settings
+    if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
+        std::cerr << "Error setting serial attributes." << std::endl;
+        return -1;
+    }
+
+    return serial_port;
 }
 
 
@@ -88,7 +126,7 @@ public:
         parameters.polygonalApproxAccuracyRate = 0.13;
         parameters.errorCorrectionRate = 0.8;
         parameters.adaptiveThreshConstant = 3.0;
-        parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+        parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_NONE;
         charucoParams = cv::aruco::CharucoParameters();
         board = cv::aruco::CharucoBoard(cv::Size(5, 7), 0.03644f, 0.02274f, dictionary);
 
