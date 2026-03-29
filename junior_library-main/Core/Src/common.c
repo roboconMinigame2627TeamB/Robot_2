@@ -44,15 +44,15 @@ void RNS_config(CAN_HandleTypeDef* hcanx) {
 //	RNSSet(&rns, RNS_F_RIGHT_VEL_PID, 1.85, 7.38, 0.0);
 //	RNSSet(&rns, RNS_B_LEFT_VEL_PID,  3.3, 21.0, 0.0);
 //	RNSSet(&rns, RNS_B_RIGHT_VEL_PID, 2.5, 8.5, 0.0);
-	RNSSet(&rns, RNS_F_LEFT_VEL_SATEU, 1.0, 1.0/17.82, 19999.0); //black bot
-	RNSSet(&rns, RNS_F_RIGHT_VEL_SATEU, 1.0, 1.0 / 19.01, 19999.0);
-	RNSSet(&rns, RNS_B_LEFT_VEL_SATEU, 1.0, 1.0 / 18.49, 19999.0);
-	RNSSet(&rns, RNS_B_RIGHT_VEL_SATEU, 1.0, 1.0 / 17.34, 19999.0);
+	RNSSet(&rns, RNS_F_LEFT_VEL_SATEU, 1.0, 1.0/10.33, 19999.0); //black bot
+	RNSSet(&rns, RNS_F_RIGHT_VEL_SATEU, 1.0, 1.0 / 11.48, 19999.0);
+	RNSSet(&rns, RNS_B_LEFT_VEL_SATEU, 1.0, 1.0 / 10.67, 19999.0);
+	RNSSet(&rns, RNS_B_RIGHT_VEL_SATEU, 1.0, 1.0 / 10.44, 19999.0);
 
-	RNSSet(&rns, RNS_F_LEFT_VEL_PID,  2.7, 9.1, 0.0041);
-	RNSSet(&rns, RNS_F_RIGHT_VEL_PID, 1.6, 6.745, 0.0057);
-	RNSSet(&rns, RNS_B_LEFT_VEL_PID,  2.05, 9.1, 0.0025);
-	RNSSet(&rns, RNS_B_RIGHT_VEL_PID, 1.63, 6.42, 0.0016);
+	RNSSet(&rns, RNS_F_LEFT_VEL_PID,  1.8, 18.0, 0.0);
+	RNSSet(&rns, RNS_F_RIGHT_VEL_PID, 1.764, 17.775, 0.0);
+	RNSSet(&rns, RNS_B_LEFT_VEL_PID,  1.9125, 16.3928, 0.0);
+	RNSSet(&rns, RNS_B_RIGHT_VEL_PID, 1.44, 17.28, 0.0);
 
 //	RNSSet(&rns, RNS_F_LEFT_VEL_FUZZY_PID_BASE, 0.2, 0.2, 0.2);
 //	RNSSet(&rns, RNS_F_LEFT_VEL_FUZZY_PID_PARAM, 0.02, 0.02, 0.02);

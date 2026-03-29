@@ -24,7 +24,7 @@ float Allign_x = 0.0;
 float Allign_y = 0.0;
 float Allign_w = 0.0;
 
-char buffer[120];
+//char buffer[120];
 
 //pwm variabls
 typedef struct {
@@ -51,14 +51,14 @@ void vMotorControlTask(void *vParameters) {//read global motor pwm varible and c
 	MotorSpeeds_t local_pwm = {0, 0, 0, 0};
 	for(;;) {
 		if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-			local_speeds = motor_pwm;
+			                  local_pwm = motor_pwm;
 			xSemaphoreGive( xMotorMutex );
 		}
 		WriteBDC(&BDC5,local_pwm.BDC5_pwm);
 		WriteBDC(&BDC6,local_pwm.BDC6_pwm);
 		WriteBDC(&BDC7,local_pwm.BDC7_pwm);
 		WriteBDC(&BDC8,local_pwm.BDC8_pwm);
-		SHIFTREGShift(&shiftreg);
+		SHIFTREGShift(&SR);
 		vTaskDelay(pdMS_TO_TICKS(20));
 	}
 }
@@ -149,18 +149,18 @@ void vAllignmentTask(void *pvParameters) {
 //	}
 //}
 
-void vTelemetryTask(void *pvParameters) {
-		for(;;) {
-
-		RNSEnquire(RNS_X_Y_IMU_LSA, &rns);
-		float x = rns.RNS_data.common_buffer[1].data;
-		float y = rns.RNS_data.common_buffer[2].data;
-		sprintf(buffer, "%.2f,%.2f\r\n", x,y);
-		UARTPrintString(&huart2, buffer);
-
-		vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100ms
-	}
-}
+//void vTelemetryTask(void *pvParameters) {
+//		for(;;) {
+//
+//		RNSEnquire(RNS_X_Y_IMU_LSA, &rns);
+//		float x = rns.RNS_data.common_buffer[1].data;
+//		float y = rns.RNS_data.common_buffer[2].data;
+//		sprintf(buffer, "%.2f,%.2f\r\n", x,y);
+//		UARTPrintString(&huart2, buffer);
+//
+//		vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100ms
+//	}
+//}
 
 void vControllerTask(void *pvParameters) { //PS4 controls
 	uint16_t prev_button = 0;
@@ -307,124 +307,26 @@ void vDriveTask(void *pvParameters) {
     }
 }
 
-//motor pid tuning
 
-//volatile float aw = 0.0, bw = 0.0, cw = 0.0, dw = 0.0;
-//volatile float kp = 0.0, ki = 0.0, kd = 0.0;
-//volatile int mode = 0;
-//volatile int tune_finish = 0;
-//
-//char buffer[64];
-char rx_buf[64];
-volatile uint8_t rx_idx = 0;
-//volatile uint8_t cmd_ready = 0;
-uint8_t uart5_rx;
-////
-//void update_pid() {
-//    if(mode == 0) RNSSet(&rns, RNS_F_LEFT_VEL_PID,  kp, ki, kd);
-//    else if(mode == 1) RNSSet(&rns, RNS_F_RIGHT_VEL_PID, kp, ki, kd);
-//    else if(mode == 2) RNSSet(&rns, RNS_B_LEFT_VEL_PID,  kp, ki, kd);
-//    else if(mode == 3) RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
-//}
-//
-//void process_command() {
-//    if (!cmd_ready) return;
-//
-//    char cmd = rx_buf[0];
-//    float val = atof((char*)&rx_buf[1]); // Convert everything after the first char to float
-//
-//    switch(cmd) {
-//        case 'v': case 'V':
-//            aw = val;
-//            bw = val;
-//            cw = val;
-//            dw = val;
-//            RNSVelocity(aw, bw, cw, dw, &rns);
-//            break;
-//        case 'p': case 'P':
-//            kp = val;
-//            PIDGainSet(KP, kp, &pid_rotate);
-////            update_pid();
-//            break;
-//        case 'i': case 'I':
-//            ki = val;
-//            PIDGainSet(KI, ki, &pid_rotate);
-////            update_pid();
-//            break;
-//        case 'd': case 'D':
-//            kd = val;
-//            PIDGainSet(KD, kd, &pid_rotate);
-////            update_pid();
-//            break;
-//        case 'n': case 'N': // Send 'n' to advance to the Next motor
-//            mode++;
-//            aw = 0; bw = 0; cw = 0; dw = 0; // Stop previous motor
-//            RNSVelocity(aw, bw, cw, dw, &rns);
-//
-//            if(mode > 3) {
-//                mode = 0;
-//                tune_finish = 1;
-//            }
-//            break;
-//    }
-//    rx_idx = 0;
-//    cmd_ready = 0;
-//}
-//
-//float actual_V = 0.0;
-//float target_V = 0.0;
-//
-//void tune_motor() {
-//    uint32_t last_call = 0;
-//    tune_finish = 0;
-//    mode = 0;
-//    HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
-//
-//    aw = 0; bw = 0; cw = 0; dw = 0;
-//    RNSVelocity(0, 0, 0, 0, &rns);
-//
-//
-//    while(!tune_finish) {
-//
-//
-//        process_command();
-//        uint32_t now = HAL_GetTick();
-//        if (now - last_call >= 10) {
-//        	RNSEnquire(RNS_VEL_BOTH, &rns);
-//
-//
-////            if (mode == 0)      { actual_V = rns.RNS_data.common_buffer[0].data; target_V = aw; }
-////            else if (mode == 1) { actual_V = rns.RNS_data.common_buffer[1].data; target_V = bw; }
-////            else if (mode == 2) { actual_V = rns.RNS_data.common_buffer[2].data; target_V = cw; }
-////            else if (mode == 3) { actual_V = rns.RNS_data.common_buffer[3].data; target_V = dw; }
-//
-//            sprintf(buffer, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", rns.RNS_data.common_buffer[0].data, rns.RNS_data.common_buffer[1].data,rns.RNS_data.common_buffer[2].data, rns.RNS_data.common_buffer[3].data, aw);
-//            UARTPrintString(&huart5, buffer);
-//
-//            last_call = now;
-//        }
-//    }
-//    RNSStop(&rns);
-//}
+
 
 int main(void)
 {
 
 	set();
-	//	HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
 
-	xMotorMutex = xSemaphoreCreateMutex();
-	if (xMotorMutex != NULL) {
-
-
-		xTaskCreate(
-				vReadEncoderTask,
-				"ReadEncoderTask",
-				512,
-				NULL,
-				3,
-				NULL
-		);
+//	xMotorMutex = xSemaphoreCreateMutex();
+//	if (xMotorMutex != NULL) {
+//
+//
+//		xTaskCreate(
+//				vReadEncoderTask,
+//				"ReadEncoderTask",
+//				512,
+//				NULL,
+//				3,
+//				NULL
+//		);
 //		xTaskCreate(
 //				vMotorControlTask,
 //				"MotorControlTask",
@@ -469,9 +371,9 @@ int main(void)
 	//			2,
 	//			NULL
 	//		);
-	}
-
-	vTaskStartScheduler();
+//	}
+//
+//	vTaskStartScheduler();
 
 	while(1){}
 }
@@ -486,45 +388,47 @@ void TIM6_DAC_IRQHandler(void)
 
 	HAL_TIM_IRQHandler(&htim6);
 }
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == UART5)
-    {
-
-        if (uart5_rx == '\n' || uart5_rx == '\r') {
-            if (rx_idx > 0) {
-                rx_buf[rx_idx] = '\0';
-                sscanf(rx_buf, "%f,%f,%f", &Allign_x, &Allign_y,&Allign_w);
-
-                rx_idx = 0;
-            }
-        }
-        else {
-
-            if (rx_idx < 63) {
-                rx_buf[rx_idx++] = uart5_rx;
-            }
-        }
-
-
-        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
-    }
-}
-/**
- * @brief  This function is executed in case of error occurrence.
- */
-//void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 //{
-//    // If the UART crashes due to an Overrun Error (or any error),
-//    // force it to clear the error and restart the receive interrupt.
-//    if (huart->Instance == UART5) {
-//        // Clear the Overrun error flag (syntax might vary slightly based on STM32F4 family)
-//        __HAL_UART_CLEAR_OREFLAG(huart);
+//    if (huart->Instance == UART5)
+//    {
 //
-//        // Restart the interrupt
+//        if (uart5_rx == '\n' || uart5_rx == '\r') {
+//            if (rx_idx > 0) {
+//                rx_buf[rx_idx] = '\0';
+//                sscanf(rx_buf, "%f,%f,%f", &Allign_x, &Allign_y,&Allign_w);
+//
+//                rx_idx = 0;
+//            }
+//        }
+//        else {
+//
+//            if (rx_idx < 63) {
+//                rx_buf[rx_idx++] = uart5_rx;
+//            }
+//        }
+//
+//
 //        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
 //    }
 //}
+
+
+/**
+ * @brief  This function is executed in case of error occurrence.
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    // If the UART crashes due to an Overrun Error (or any error),
+    // force it to clear the error and restart the receive interrupt.
+    if (huart->Instance == UART5) {
+        // Clear the Overrun error flag (syntax might vary slightly based on STM32F4 family)
+        __HAL_UART_CLEAR_OREFLAG(huart);
+
+        // Restart the interrupt
+        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+    }
+}
 
 void Error_Handler(void)
 {

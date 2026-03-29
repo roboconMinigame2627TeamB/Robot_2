@@ -54,127 +54,131 @@
 
 
 
-//void buttons_pressed(){
-//		ps4.button = ps4.buf1 | (ps4.buf2 << 8) | (ps4.buf3 << 16);
-//
-//		if (ps4.button & PS) {
-//			RNSStop(&rns);
-//			NVIC_SystemReset();
-//		}
-//		else if ((ps4.button & UP) && !(prev_button & UP)) {
-//
-//			target_angle = angle_wrapper(target_angle + 180.0);
-//			PIDDelayInit(&pid_rotate);
-//
-//		}
-//		else if ((ps4.button & RIGHT) && !(prev_button & RIGHT)) {
-//
-//			target_angle = angle_wrapper(target_angle + 90.0);
-//			PIDDelayInit(&pid_rotate);
-//		}
-//		else if ((ps4.button & LEFT) && !(prev_button & LEFT)) {
-//
-//			target_angle = angle_wrapper(target_angle - 90.0);
-//			PIDDelayInit(&pid_rotate);
-//
-//		}
-//		else if ((ps4.button & CIRCLE) && !(prev_button & CIRCLE)){
-//			float point[2][7]={
-//					{0.5,0.0,1.0,0.0,0.0,1.0,0.0},
-//					{0.5,0.0,0.0,0.0,0.0,1.0,0.0}
-////					{0.5,1.0,0.0,0.0,1.5,1.0,0.0},
-////					{0.5,0.0,0.0,0.0,1.5,1.0,0.0}
-//
-//			};
-//			RNSPPstart(point,2,&rns);
-//			while(rns.RNS_data.common_instruction == RNS_BUSY) {
-//
-//			}
-//
-//		}
-//		else if ((ps4.button & TRIANGLE) && !(prev_button & TRIANGLE)) {
-//			imu_lock_flag = !imu_lock_flag;
-//		}
-//
-//		else if ((ps4.button & SQUARE) && !(prev_button & SQUARE)) {
-//			p_lock_flag = !p_lock_flag;
-//		}
-//		else if (fabs(ps4.joyL_x) > 0.1 || fabs(ps4.joyL_y) > 0.1 || fabs(ps4.joyR_x) > 0.1) {
-//			x = ps4.joyL_x;
-//			y = ps4.joyL_y;
-//			w = ps4.joyR_x;
-//		}
-//		else {
-//			x = 0.0;
-//			y = 0.0;
-//			w = 0.0;
-//		}
-//		prev_button = ps4.button;
-//
-//		RNSEnquire(RNS_X_Y_IMU_LSA, &rns);
-//		float current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
-//		float rad  = current_angle * 3.1415926f/180.0f;
-//		sin_t = sinf(rad);
-//		cos_t = cosf(rad);
-//
-//		if(set_once){
-//			target_angle = current_angle;
-//			set_once = 0;
-//		}
-//
-//		if(p_lock_flag){
-//			float x_world = x;
-//			float y_world = y;
-//			x =  x_world * cos_t + y_world * sin_t;
-//			y = -x_world * sin_t + y_world * cos_t;
-//		}
-//
-//		if (imu_lock_flag) {
-//			error_val = -1*angle_wrapper(target_angle - current_angle);
-//
-//			if (fabs(ps4.joyR_x) > 0.1){
-//				w = ps4.joyR_x;
-//				target_angle = current_angle;
-//				PIDDelayInit(&pid_rotate);
-//
-//			} else {
-//
-//				if(fabs(error_val) > 2.0) {
-//					w = w_pid_out;
-//				} else{
-//					w = 0.0;
-//				}
-//			}
-//		}
-//
-//		float motorA = y - x - w;
-//		float motorB = y + x + w;
-//		float motorC = y + x - w;
-//		float motorD = y - x + w;
-//
-//
-//		float max_val = fabs(motorA);
-//		if (fabs(motorB) > max_val) max_val = fabs(motorB);
-//		if (fabs(motorC) > max_val) max_val = fabs(motorC);
-//		if (fabs(motorD) > max_val) max_val = fabs(motorD);
-//
-//
-//		if (max_val > 1.0) {
-//			motorA /= max_val;
-//			motorB /= max_val;
-//			motorC /= max_val;
-//			motorD /= max_val;
-//		}
-//
-//
-//		float final_scale = 1.75f;
-//		RNSVelocity(motorA * final_scale,
-//				motorB * final_scale,
-//				motorC * final_scale,
-//				motorD * final_scale,
-//				&rns);
-//
-//}
+//motor pid tuning
+/*
+volatile float aw = 0.0, bw = 0.0, cw = 0.0, dw = 0.0;
+volatile float kp = 0.0, ki = 0.0, kd = 0.0;
+volatile int mode = 2;
+volatile int tune_finish = 0;
+
+char buffer[64];
+char rx_buf[64];
+volatile uint8_t rx_idx = 0;
+volatile uint8_t cmd_ready = 0;
+uint8_t uart5_rx;
+////
+
+void process_command() {
+    if (!cmd_ready) return;
+
+    char cmd = rx_buf[0];
+    float val = atof((char*)&rx_buf[1]); // Convert everything after the first char to float
+
+    switch(cmd) {
+        case 'v': case 'V':
+        	aw = val;
+        	bw = val;
+        	cw = val;
+        	dw = val;
+            RNSVelocity(aw, bw, cw, dw, &rns);
+            break;
+        case 'p': case 'P':
+            kp = val;
+
+
+            RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
+
+            break;
+        case 'i': case 'I':
+            ki = val;
+
+
+            RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
+
+            break;
+        case 'd': case 'D':
+            kd = val;
+
+
+            RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
+
+            break;
+        case 'n': case 'N': // Send 'n' to advance to the Next motor
+            mode++;
+            aw = 0; bw = 0; cw = 0; dw = 0; // Stop previous motor
+            RNSVelocity(aw, bw, cw, dw, &rns);
+
+            if(mode > 3) {
+                mode = 0;
+                tune_finish = 1;
+            }
+            break;
+    }
+    rx_idx = 0;
+    cmd_ready = 0;
+}
+
+float actual_V = 0.0;
+float target_V = 0.0;
+
+void tune_motor() {
+    uint32_t last_call = 0;
+    tune_finish = 0;
+    mode = 0;
+    HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+
+    aw = 0; bw = 0; cw = 0; dw = 0;
+    RNSVelocity(0, 0, 0, 0, &rns);
+    while(!tune_finish) {
+        process_command();
+        uint32_t now = HAL_GetTick();
+        if (now - last_call >= 1) {
+
+        	RNSEnquire(RNS_VEL_BOTH, &rns);
+
+            if (mode == 0)      { actual_V = rns.RNS_data.common_buffer[0].data; target_V = aw; }
+            else if (mode == 1) { actual_V = rns.RNS_data.common_buffer[1].data; target_V = bw; }
+            else if (mode == 2) { actual_V = rns.RNS_data.common_buffer[2].data; target_V = cw; }
+            else if (mode == 3) { actual_V = rns.RNS_data.common_buffer[3].data; target_V = dw; }
+
+            sprintf(buffer, "%.2f,%.2f\r\n", actual_V, target_V);
+//            sprintf(buffer, "%.2f,%.2f,%.2f,%.2f\r\n", rns.RNS_data.common_buffer[0].data,rns.RNS_data.common_buffer[1].data,rns.RNS_data.common_buffer[2].data,rns.RNS_data.common_buffer[3].data);
+            UARTPrintString(&huart5, buffer);
+
+            last_call = now;
+        }
+    }
+    RNSStop(&rns);
+}
+
+// Place this in your main.c (or wherever your user callbacks are defined)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    // Check if the interrupt was triggered by UART5
+    if (huart->Instance == UART5) {
+
+        // Look for end-of-line characters (Enter key: Carriage Return or Line Feed)
+        if (uart5_rx == '\r' || uart5_rx == '\n') {
+
+            // Make sure we actually received data (prevents double-triggering on \r\n)
+            if (rx_idx > 0) {
+                rx_buf[rx_idx] = '\0'; // Null-terminate the buffer so atof() works correctly
+                cmd_ready = 1;         // Signal process_command() to run
+            }
+
+        } else {
+            // Append the new character to the buffer
+            // We check against 63 to leave room for the '\0' terminator (buffer is 64)
+            if (rx_idx < 63) {
+                rx_buf[rx_idx] = uart5_rx;
+                rx_idx++;
+            }
+        }
+
+        // Re-arm the interrupt to listen for the next single byte
+        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+    }
+}
+*/
 /* USER CODE END FunctionPrototypes */
 
 /* Private application code --------------------------------------------------*/
