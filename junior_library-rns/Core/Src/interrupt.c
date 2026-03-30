@@ -158,16 +158,16 @@ void TIM7_IRQHandler(void)
 char budtest[100];
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	static int budcount = 0;
+//	static int budcount = 0;
 	if (htim->Instance == TIM7) {
 		HAL_IncTick();
 		//		MUXUpdate(&MUX);
 		SHIFTREGShift(&SR);
-		if(budcount++ >= 20){
-			sprintf(budtest, "Where am i? I am in your head :)\n");
-			UARTPrintString(&huart5, budtest);
-			budcount = 0;
-		}
+//		if(budcount++ >= 20){
+//			sprintf(budtest, "Where am i? I am in your head :)\n");
+//			UARTPrintString(&huart5, budtest);
+//			budcount = 0;
+//		}
 	}
 }
 

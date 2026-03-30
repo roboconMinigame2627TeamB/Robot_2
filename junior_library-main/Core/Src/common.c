@@ -35,16 +35,7 @@ void RNS_config(CAN_HandleTypeDef* hcanx) {
 	RNSSet(&rns, RNS_F_KCD_PTD, 203.20885/ 204.50492, (float)(0.125 * 3.142 / 203.20885));
 	RNSSet(&rns, RNS_B_KCD_PTD, 203.56232/ 203.60160, (float)(0.125 * 3.142 / 203.56232));
 
-//	RNSSet(&rns, RNS_F_LEFT_VEL_SATEU, 1.0, 1.0 / 17.9120, 19999.0); //bluebot
-//	RNSSet(&rns, RNS_F_RIGHT_VEL_SATEU, 1.0, 1.0 / 20.7897, 19999.0);
-//	RNSSet(&rns, RNS_B_LEFT_VEL_SATEU, 1.0, 1.0 / 18.3077, 19999.0);
-//	RNSSet(&rns, RNS_B_RIGHT_VEL_SATEU, 1.0, 1.0 / 18.7605, 19999.0);
-//
-//	RNSSet(&rns, RNS_F_LEFT_VEL_PID,  2.25, 13.5, 0.0);
-//	RNSSet(&rns, RNS_F_RIGHT_VEL_PID, 1.85, 7.38, 0.0);
-//	RNSSet(&rns, RNS_B_LEFT_VEL_PID,  3.3, 21.0, 0.0);
-//	RNSSet(&rns, RNS_B_RIGHT_VEL_PID, 2.5, 8.5, 0.0);
-	RNSSet(&rns, RNS_F_LEFT_VEL_SATEU, 1.0, 1.0/10.33, 19999.0); //black bot
+	RNSSet(&rns, RNS_F_LEFT_VEL_SATEU, 1.0, 1.0/10.33, 19999.0);
 	RNSSet(&rns, RNS_F_RIGHT_VEL_SATEU, 1.0, 1.0 / 11.48, 19999.0);
 	RNSSet(&rns, RNS_B_LEFT_VEL_SATEU, 1.0, 1.0 / 10.67, 19999.0);
 	RNSSet(&rns, RNS_B_RIGHT_VEL_SATEU, 1.0, 1.0 / 10.44, 19999.0);

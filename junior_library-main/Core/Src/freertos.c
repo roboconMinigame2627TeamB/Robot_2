@@ -177,6 +177,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         // Re-arm the interrupt to listen for the next single byte
         HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
     }
+
+    void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+    // If the UART crashes due to an Overrun Error (or any error),
+    // force it to clear the error and restart the receive interrupt.
+    if (huart->Instance == UART5) {
+        // Clear the Overrun error flag (syntax might vary slightly based on STM32F4 family)
+        __HAL_UART_CLEAR_OREFLAG(huart);
+
+        // Restart the interrupt
+        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+    }
+}
 }
 */
 /* USER CODE END FunctionPrototypes */
