@@ -10,7 +10,7 @@ void set(void) {
 
 	Initialize();
 //	PSxInitDMA(&ps4,&hi2c1);
-//	TIMxInit(&htim6, 20000, 84, 5, 0);
+	TIMxInit(&htim6, 20000, 84, 5, 0);
 	TIMxInit(&htim2, 20000, 84, 5, 0);//20ms
 	RNS_config(&hcan1);
 	PIDSourceInit(&error_val, &w_pid_out, &pid_rotate);

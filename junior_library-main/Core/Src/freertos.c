@@ -198,5 +198,21 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
 /* USER CODE END Application */
 
+//int32_t qei4;
+//int32_t qei1;
+//void vReadEncoderTask(void *pvParameters) {
+//	QEIWrite(QEI1, 32786);
+//	for(;;){
+//
+//		qei1 = QEIRead(QEI1); //kfs gripper angle
+//		qei4 = QEIRead(QEI4); //kfs gripper open/close
+////		int32_t qei8 = QEIRead(QEI6); // not in use
+//		float angle = calculateKFSGripperAngle(qei1);
+//		sprintf(buffer, "%.2f,%ld\r\n", angle,qei4);
+//		UARTPrintString(&huart5, buffer);
+//		vTaskDelay(pdMS_TO_TICKS(70));
+//
+//	}
+//}
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -27,10 +27,10 @@
 
 #define lsf1  		HAL_GPIO_ReadPin(IP1_PIN)// IR sensor at gripper
 #define IP2  		HAL_GPIO_ReadPin(IP2_PIN)// limit switch for opening gripper
-#define lsfl1  		HAL_GPIO_ReadPin(IP3_PIN)// IR sensor at spearhead gripper
+#define lsfl1  		HAL_GPIO_ReadPin(IP3_PIN)
 #define lsfl2 		HAL_GPIO_ReadPin(IP4_PIN)
-#define lsfb 		HAL_GPIO_ReadPin(IP5_PIN)
-#define lsb1 		HAL_GPIO_ReadPin(IP6_PIN)
+#define lsfb 		HAL_GPIO_ReadPin(IP5_PIN)// IR sensor at spearhead gripper
+#define lsb1 		HAL_GPIO_ReadPin(IP6_PIN)// limit switch for closing gripper
 #define lsb2	    HAL_GPIO_ReadPin(IP7_PIN)
 #define lsf2 		HAL_GPIO_ReadPin(IP8_PIN)
 #define IP9  		HAL_GPIO_ReadPin(IP9_PIN) //Platform top limit switch

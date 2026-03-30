@@ -29,6 +29,7 @@ void vMotorControlTask(void *vParameters);
 void vControllerTask(void *pvParameters);
 void vDriveTask(void *pvParameters);
 void vKFSGripperTask(void *pvParameters);
+void vBoxIntakeTask(void *vParameters);
 
 //Function Prototypes
 int32_t previousEncoderValue = 0;
@@ -39,36 +40,34 @@ float angle_wrapper(float angle);
 
 //Flags
 
-volatile uint8_t imu_lock_flag = 0;
-uint8_t p_lock_flag = 0;
-uint8_t A_lock_flag = 0;
-uint8_t is_path_planning = 0;
-uint8_t start_assembly_flag = 0;
-uint8_t kfs_rotate_flag = 0; // 0 - nothing, 1 - move
-uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
-uint8_t KFS_angle_state = 0; // 0 - rotate up, 1 - rotate down
-uint8_t KFS_grip_state = 0; //0 open, 1 close
+volatile uint8_t imu_lock_flag = 1;
+volatile uint8_t p_lock_flag = 0;
+volatile uint8_t kfs_rotate_flag = 0; // 0 - nothing, 1 - move
+volatile uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
+volatile uint8_t KFS_angle_state = 0; // 0 - rotate up, 1 - rotate down
+volatile uint8_t KFS_grip_state = 0; //0 open, 1 close
 
 // Alignment variables
 float target_angle = 0.0;
 float Allign_x = 0.0;
 float Allign_y = 0.0;
 float Allign_w = 0.0;
+
 //float a,b,c,d,x,y;
-char buffer[128];
+//char buffer[120];
 
 
 //pwm variables
-
 typedef struct {
 	int32_t BDC5_pwm; //Platform rollers
 	int32_t BDC6_pwm; //Platform lift
-	int32_t BDC7_pwm; //KFS gripper open/close
-	int32_t BDC8_pwm; //KFS gripper rotation
+	int32_t BDC7_pwm; //KFS gripper open/close + open, - close
+	int32_t BDC8_pwm; //KFS gripper rotation + down, - up
 } MotorSpeeds_t;
 
 MotorSpeeds_t motor_pwm = {0, 0, 0, 0};
 SemaphoreHandle_t xMotorMutex = NULL;
+SemaphoreHandle_t xRNSMutex = NULL;
 
 float angle_wrapper(float angle) {
 	while (angle > 180.0) angle -= 360.0;
@@ -92,7 +91,7 @@ void vMotorControlTask(void *vParameters) {//read global motor pwm varible and c
 	}
 }
 
-void vBoxIntakeTask(void *vParameters) { //auto after IR detection
+void vBoxIntakeTask(void *vParameters) {
 	/*
 	 * lsf1 is IR sensor at gripper
 	 * IP2 is limit switch for opening gripper
@@ -103,18 +102,12 @@ void vBoxIntakeTask(void *vParameters) { //auto after IR detection
 	uint8_t start_opened = 0;
 	uint8_t set_once = 0;
 	uint8_t first_box = 1;
-	int16_t gripper_pos;
-	QEIWrite(QEI4,32768);
-	uint16_t start_encoder = 32768;
 	float gripper_angle;
+	for(;;) {
 
-	for(;;){
-		gripper_pos = (int16_t)(QEIRead(QEI4) - start_encoder);
-		gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
-
-		if(!IP2 && !start_opened) { //ensure gripper is opened
+		if(!IP2 && !start_opened) { // ensure gripper is opened
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC7_pwm = 2000;
+				motor_pwm.BDC7_pwm = 1000;
 				xSemaphoreGive(xMotorMutex);
 			}
 		} else {
@@ -126,17 +119,19 @@ void vBoxIntakeTask(void *vParameters) { //auto after IR detection
 				}
 				xSemaphoreGive(xMotorMutex);
 			}
-
 		}
 
 		if(lsf1 && start_opened) {  // IR detected
-			while (!closed_flag) {
-				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // close gripper
-					motor_pwm.BDC7_pwm = -2000;
-					xSemaphoreGive(xMotorMutex);
-				}
-				if(gripper_pos >= 0){
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { //stop motor
+
+			// STATE 1: Close Gripper
+			if (!closed_flag) {
+				if(lsb1) {
+					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+						motor_pwm.BDC7_pwm = -1000;
+						xSemaphoreGive(xMotorMutex);
+					}
+				} else {
+					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 						motor_pwm.BDC7_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
 					}
@@ -144,13 +139,18 @@ void vBoxIntakeTask(void *vParameters) { //auto after IR detection
 					rotate_flag = 1;
 				}
 			}
-			while (rotate_flag && first_box) {
-				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // rotate gripper upwards
-					motor_pwm.BDC8_pwm = -2000;
-					xSemaphoreGive(xMotorMutex);
-				}
-				if(gripper_angle >= 140.0 ){
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
+
+			// STATE 2: Rotate Gripper Upwards
+			else if (rotate_flag && first_box) {
+				gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
+
+				if(gripper_angle < 140.0) { // Keep rotating up
+					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+						motor_pwm.BDC8_pwm = -500;
+						xSemaphoreGive(xMotorMutex);
+					}
+				} else {
+					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 						motor_pwm.BDC8_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
 					}
@@ -159,13 +159,18 @@ void vBoxIntakeTask(void *vParameters) { //auto after IR detection
 					start_opened = 0;
 				}
 			}
-			while(return_flag && first_box){
-				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // rotate gripper downwards
-					motor_pwm.BDC8_pwm = 2000;
-					xSemaphoreGive(xMotorMutex);
-				}
-				if(gripper_angle <= 0.0 ){
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
+
+			// STATE 3: Rotate Gripper Downwards
+			else if (return_flag && first_box) {
+				gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
+
+				if(gripper_angle > 0.0) {
+					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+						motor_pwm.BDC8_pwm = 400;
+						xSemaphoreGive(xMotorMutex);
+					}
+				} else {
+					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 						motor_pwm.BDC8_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
 					}
@@ -174,6 +179,8 @@ void vBoxIntakeTask(void *vParameters) { //auto after IR detection
 				}
 			}
 		}
+
+		vTaskDelay(pdMS_TO_TICKS(50));
 	}
 }
 /*
@@ -243,7 +250,9 @@ void vControllerTask(void *pvParameters) {
 		int32_t req_roller = 0;
 		int32_t req_lift = 0;
 
-		if (ps4.button & PS) { RNSStop(&rns); NVIC_SystemReset(); } // Emergency Button
+		if (ps4.button & PS) { // Emergency Button
+			RNSStop(&rns);
+			NVIC_SystemReset(); }
 
 		else if ((ps4.button & TRIANGLE) && !(prev_button & TRIANGLE)) p_lock_flag = !p_lock_flag;	// Toggle Per. Control
 
@@ -273,7 +282,11 @@ void vControllerTask(void *pvParameters) {
 		else if ((ps4.button & RIGHT) && !(prev_button & RIGHT)) {
 			if (!imu_lock_flag) {
 				imu_lock_flag = 1;
-				RNSEnquire(RNS_X_Y_IMU_LSA, &rns);
+				if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
+					RNSEnquire(RNS_ANGLE, &rns);
+					xSemaphoreGive(xRNSMutex);
+				}
+
 				target_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
 			}
 			target_angle = angle_wrapper(floor(target_angle / 90.0) * 90.0 + 90.0);
@@ -282,7 +295,10 @@ void vControllerTask(void *pvParameters) {
 		else if ((ps4.button & LEFT) && !(prev_button & LEFT)) {
 			if (!imu_lock_flag) {
 				imu_lock_flag = 1;
-				RNSEnquire(RNS_X_Y_IMU_LSA, &rns);
+				if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
+					RNSEnquire(RNS_ANGLE, &rns);
+					xSemaphoreGive(xRNSMutex);
+				}
 				target_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
 			}
 			target_angle = angle_wrapper(ceil(target_angle / 90.0) * 90.0 - 90.0);
@@ -304,10 +320,9 @@ void vControllerTask(void *pvParameters) {
 			else req_lift = 0;
 		}
 
-		/* --- COMMIT TO SHARED STRUCT --- */
 		if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-			motor_pwm.BDC5_pwm = req_roller; // Mapping Rollers to BDC5
-			motor_pwm.BDC6_pwm = req_lift;   // Mapping Lift to BDC6
+			motor_pwm.BDC5_pwm = req_roller;
+			motor_pwm.BDC6_pwm = req_lift;
 			xSemaphoreGive(xMotorMutex );
 		}
 
@@ -317,16 +332,13 @@ void vControllerTask(void *pvParameters) {
 }
 
 void vKFSGripperTask(void *pvParameters) {
-	int16_t gripper_pos;
 	float gripper_angle;
-
 	for(;;){
-		gripper_pos = (int16_t)(QEIRead(QEI4) - 32768);
 		gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
 		if(kfs_rotate_flag) {
 			if (!KFS_angle_state) {
 
-				if(gripper_angle >= 140.0 ){
+				if(gripper_angle >= 140.0){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
 						motor_pwm.BDC8_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
@@ -334,12 +346,11 @@ void vKFSGripperTask(void *pvParameters) {
 					kfs_rotate_flag = 0;
 				} else{
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // rotate gripper upwards
-						motor_pwm.BDC8_pwm = -2000;
+						motor_pwm.BDC8_pwm = -500;
 						xSemaphoreGive(xMotorMutex);
 					}
 				}
 			} else{
-
 				if(gripper_angle <= 0.0 ){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
 						motor_pwm.BDC8_pwm = 0;
@@ -348,7 +359,7 @@ void vKFSGripperTask(void *pvParameters) {
 					kfs_rotate_flag = 0;
 				} else{
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // rotate gripper downwards
-						motor_pwm.BDC8_pwm = 2000;
+						motor_pwm.BDC8_pwm = 500;
 						xSemaphoreGive(xMotorMutex);
 					}
 				}
@@ -360,7 +371,7 @@ void vKFSGripperTask(void *pvParameters) {
 
 				if(!IP2) {
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC7_pwm = 2000;
+						motor_pwm.BDC7_pwm = 1000;
 						xSemaphoreGive(xMotorMutex);
 					}
 				} else {
@@ -373,7 +384,7 @@ void vKFSGripperTask(void *pvParameters) {
 
 			} else { //close grip
 
-				if(gripper_pos >= 0){
+				if(!lsb1){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { //stop motor
 						motor_pwm.BDC7_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
@@ -381,112 +392,101 @@ void vKFSGripperTask(void *pvParameters) {
 					kfs_grip_flag = 0;
 				} else{
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // close gripper
-						motor_pwm.BDC7_pwm = -2000;
+						motor_pwm.BDC7_pwm = -1000;
 						xSemaphoreGive(xMotorMutex);
 					}
 				}
 			}
 		}
-		vTaskDelay(pdMS_TO_TICKS(20));
+		vTaskDelay(pdMS_TO_TICKS(30));
 	}
 }
-
+float current_angle;
 void vDriveTask(void *pvParameters) {
 	float x = 0.0, y = 0.0, w = 0.0;
 	int set_once = 1;
 	float cos_t, sin_t;
-
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	const TickType_t xFrequency = pdMS_TO_TICKS(10);
 
 	for(;;) {
 
-		if (!is_path_planning && !A_lock_flag) {
-			if (fabs(ps4.joyL_x) > 0.1 || fabs(ps4.joyL_y) > 0.1 || fabs(ps4.joyR_x) > 0.1) {
-				x = ps4.joyL_x; y = ps4.joyL_y; w = ps4.joyR_x;
-			}
+		if (fabs(ps4.joyL_x) > 0.1 || fabs(ps4.joyL_y) > 0.1 || fabs(ps4.joyR_x) > 0.1) {
+			x = ps4.joyL_x; y = ps4.joyL_y; w = ps4.joyR_x;
+		} else {
+			x = 0.0; y = 0.0; w =0.0;
+		}
+		if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
+			RNSEnquire(RNS_ANGLE, &rns);
+			xSemaphoreGive(xRNSMutex);
+		}
+		current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
+		float rad  = current_angle * 3.1415926f/180.0f;
+		sin_t = sinf(rad);
+		cos_t = cosf(rad);
 
-
-			RNSEnquire(RNS_X_Y_IMU_LSA, &rns);
-			float current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
-			float rad  = current_angle * 3.1415926f/180.0f;
-			sin_t = sinf(rad);
-			cos_t = cosf(rad);
-
-			if(set_once){
-				target_angle = current_angle;
-				set_once = 0;
-			}
-
-			if(p_lock_flag){
-				float x_world = x;
-				float y_world = y;
-				x =  x_world * cos_t + y_world * sin_t;
-				y = -x_world * sin_t + y_world * cos_t;
-			}
-
-			if (imu_lock_flag) {
-				error_val = -1*angle_wrapper(target_angle - current_angle);
-
-				if (fabs(ps4.joyR_x) > 0.1){
-
-					w = ps4.joyR_x;
-					target_angle = current_angle;
-
-
-				} else {
-					if(fabs(error_val) > 2.0) {
-						w = w_pid_out;
-					} else{
-						w = 0.0;
-					}
-				}
-			}
-
-			float motorA = y - x - w;
-			float motorB = y + x + w;
-			float motorC = y + x - w;
-			float motorD = y - x + w;
-
-
-			float max_val = fabs(motorA);
-			if (fabs(motorB) > max_val) max_val = fabs(motorB);
-			if (fabs(motorC) > max_val) max_val = fabs(motorC);
-			if (fabs(motorD) > max_val) max_val = fabs(motorD);
-
-
-			if (max_val > 1.0) {
-				motorA /= max_val;
-				motorB /= max_val;
-				motorC /= max_val;
-				motorD /= max_val;
-			}
-
-
-			float final_scale = 1.75f;
-			RNSVelocity(motorA * final_scale,
-					motorB * final_scale,
-					motorC * final_scale,
-					motorD * final_scale,
-					&rns);
+		if(set_once){
+			target_angle = current_angle;
+			set_once = 0;
 		}
 
+		if(p_lock_flag){
+			float x_world = x;
+			float y_world = y;
+			x =  x_world * cos_t + y_world * sin_t;
+			y = -x_world * sin_t + y_world * cos_t;
+		}
+
+		if (imu_lock_flag) {
+			error_val = -1 * angle_wrapper(target_angle - current_angle);
+
+			if (fabs(ps4.joyR_x) > 0.1){
+
+				w = ps4.joyR_x;
+				target_angle = current_angle;
+
+
+			} else {
+				if(fabs(error_val) > 2.0) {
+					w = w_pid_out;
+				} else{
+					w = 0.0;
+				}
+			}
+		}
+
+		float motorA = y - x - w;
+		float motorB = y + x + w;
+		float motorC = y + x - w;
+		float motorD = y - x + w;
+
+		float max_val = fabs(motorA);
+		if (fabs(motorB) > max_val) max_val = fabs(motorB);
+		if (fabs(motorC) > max_val) max_val = fabs(motorC);
+		if (fabs(motorD) > max_val) max_val = fabs(motorD);
+
+		if (max_val > 1.0) {
+			motorA /= max_val;
+			motorB /= max_val;
+			motorC /= max_val;
+			motorD /= max_val;
+		}
+
+		float final_scale = 1.75f;
+		if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
+			RNSVelocity(motorA * final_scale,
+							motorB * final_scale,
+							motorC * final_scale,
+							motorD * final_scale,
+							&rns);
+			xSemaphoreGive(xRNSMutex);
+		}
 		vTaskDelayUntil(&xLastWakeTime, xFrequency);
 	}
+
+
 }
-/*
-void vReadEncoderTask(void *pvParameters) {
-	for(;;){
-		int32_t qei1 = QEIRead(QEI1); //kfs gripper angle
-		int32_t qei4 = QEIRead(QEI4); //kfs gripper open/close
-		int32_t qei8 = QEIRead(QEI6); // not in use
-		float angle = calculateKFSGripperAngle(qei1);
-		sprintf(buffer, "%.2f,%ld\r\n", angle,qei1);
-		UARTPrintString(&huart5, buffer);
-		vTaskDelay(pdMS_TO_TICKS(50));
-	}
-}
-*/
+
 
 float calculateKFSGripperAngle(int32_t currentEncoderValue) {
     if (isInitialized == 0) {
@@ -507,56 +507,104 @@ float calculateKFSGripperAngle(int32_t currentEncoderValue) {
 
     return angle;
 }
-/*
+
+int IR;
 void vTestTask(void *pvParameters) {
 	for(;;){
-		RNSVelocity(1.0,1.0,1.0,1.0, &rns);
-		vTaskDelay(pdMS_TO_TICKS(50));
+		IR = lsf1;
+		if(!PB1){
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC8_pwm = 500;
+				xSemaphoreGive(xMotorMutex);
+			}
+		}
+		else if(!PB2){
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC8_pwm = -500;
+				xSemaphoreGive(xMotorMutex);
+			}
+		}
+		else if(!PB3){
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC7_pwm = 1000;
+				xSemaphoreGive(xMotorMutex);
+			}
+		}
+		else if(!IP2){
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC7_pwm = -1000;
+				xSemaphoreGive(xMotorMutex);
+			}
+		}
+		else{
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+			motor_pwm.BDC8_pwm = 0;
+			motor_pwm.BDC7_pwm = 0;
+			xSemaphoreGive(xMotorMutex);
+			}
+		}
+		vTaskDelay(pdMS_TO_TICKS(100));
 	}
 }
-*/
+
 
 
 int main(void)
 {
-
 	set();
-
+	xRNSMutex   = xSemaphoreCreateMutex();
 	xMotorMutex = xSemaphoreCreateMutex();
-	if (xMotorMutex != NULL) {
+
+	if (xMotorMutex != NULL && xRNSMutex != NULL) {
 		xTaskCreate(
 				vMotorControlTask,
 				"MotorControlTask",
-				512,
+				256,
 				NULL,
 				3,
 				NULL
 		);
+//		xTaskCreate(
+//				vBoxIntakeTask,
+//				"MotorControlTask",
+//				1024,
+//				NULL,
+//				2,
+//				NULL
+//		);
 
+//		xTaskCreate(
+//				vKFSGripperTask,
+//				"KFSGripperTask",
+//				512,
+//				NULL,
+//				2,
+//				NULL
+//		);
+//
+//		xTaskCreate(
+//				vControllerTask,
+//				"ControlTask",
+//				512,
+//				NULL,
+//				2,
+//				NULL
+//		);
+//
+//		xTaskCreate(
+//				vDriveTask,
+//				"DriveTask",
+//				1024,
+//				NULL,
+//				4,
+//				NULL
+//		);
 		xTaskCreate(
-				vKFSGripperTask,
-				"KFSGripperTask",
-				512,
-				NULL,
-				3,
-				NULL
-		);
-
-		xTaskCreate(
-				vControllerTask,
-				"ControlTask",
+				vTestTask,
+				"TestTask",
 				512,
 				NULL,
 				1,
-				NULL
-		);
-
-		xTaskCreate(
-				vDriveTask,
-				"DriveTask",
-				512,
-				NULL,
-				2,
 				NULL
 		);
 	}

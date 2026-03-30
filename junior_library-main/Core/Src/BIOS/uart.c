@@ -181,7 +181,7 @@ uint16_t USART_ReceiveData(UART_HandleTypeDef* huartx)
  */
 void UARTPrintString(UART_HandleTypeDef* huartx, char s[])
 {
-	HAL_UART_Transmit(huartx, (uint8_t *)s, strlen(s), 100);
+	HAL_UART_Transmit(huartx, (uint8_t *)s, strlen(s), HAL_MAX_DELAY);
 }
 
 /*

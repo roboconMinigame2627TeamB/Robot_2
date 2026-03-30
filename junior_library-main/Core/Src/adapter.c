@@ -77,6 +77,7 @@ void Initialize(){
 
 	UARTInit(&huart2, 9600, ENABLE, 5,0);
 	UARTInit(&huart5, 115200, ENABLE, 5,0);
+	UARTInit(&huart4, 115200, ENABLE, 5,0);
 	//UARTx_DMA_Rx_Init(&huart3, &hdma_usart3_rx, 7, 0);
 	//UARTx_DMA_Tx_Init(&huart3, &hdma_usart3_tx, 7, 0);
 
