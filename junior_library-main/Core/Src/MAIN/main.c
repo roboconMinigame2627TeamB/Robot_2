@@ -10,6 +10,10 @@
  * @brief  The application entry point.
  * @retval int
  */
+//imu lock tune
+//test prespective
+//platform moto
+//roller moto
 
 
 #define PLATFORM_SPEED          15000   // PWM for platform lift  (0–20000)
@@ -199,7 +203,7 @@ void vMotorControlTask(void *vParameters) {//read global motor pwm varible and c
 
 
 typedef enum {
-    STATE_INIT_OPEN,
+	STATE_INIT_OPEN,
     STATE_INIT_ROTATE_DOWN,
     STATE_WAIT_FOR_BOX,
     STATE_CLOSE_GRIPPER,
@@ -365,7 +369,7 @@ void vControllerTask(void *pvParameters) {
 			RNSStop(&rns);
 			NVIC_SystemReset(); }
 
-		else if ((ps4.button & TRIANGLE) && !(prev_button & TRIANGLE)) p_lock_flag = !p_lock_flag;	// Toggle Per. Control
+//		else if ((ps4.button & TRIANGLE) && !(prev_button & TRIANGLE)) p_lock_flag = !p_lock_flag;	// Toggle Per. Control
 
 		else if ((ps4.button & CROSS) && !(prev_button & CROSS)) imu_lock_flag = !imu_lock_flag;	// Toggle IMU_LOCK
 
@@ -528,27 +532,32 @@ void vDriveTask(void *pvParameters) {
 
 	for(;;) {
 
+
+		if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
+					RNSEnquire(RNS_ANGLE, &rns);
+					xSemaphoreGive(xRNSMutex);
+				}
+
+		float current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
+
+		if(set_once){
+					target_angle = current_angle;
+					set_once = 0;
+				}
+
+		float rad  = current_angle * 3.1415926f/180.0f;
+		float diff = fmod(target_angle-current_angle+180,360) - 180;
+		sin_t = sinf(rad);
+		cos_t = cosf(rad);
+
 		if (fabs(ps4.joyL_x) > 0.1 || fabs(ps4.joyL_y) > 0.1 || fabs(ps4.joyR_x) > 0.1) {
 			w = ps4.joyR_x;
-			x_world = ps4.joyL_x;
-			y_world = ps4.joyL_y;
+			x_world = -ps4.joyL_x;
+			y_world = -ps4.joyL_y;
 			x =  x_world * cos_t + y_world * sin_t;
 			y = -x_world * sin_t + y_world * cos_t;
 		} else {
 			x = 0.0; y = 0.0; w =0.0;
-		}
-		if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
-			RNSEnquire(RNS_ANGLE, &rns);
-			xSemaphoreGive(xRNSMutex);
-		}
-		float current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
-		float rad  = current_angle * 3.1415926f/180.0f;
-		sin_t = sinf(rad);
-		cos_t = cosf(rad);
-
-		if(set_once){
-			target_angle = current_angle;
-			set_once = 0;
 		}
 
 		if (imu_lock_flag) {
@@ -561,7 +570,7 @@ void vDriveTask(void *pvParameters) {
 
 			} else {
 				if(fabs(error_val) > 2.0) {
-					w = w_pid_out;
+					w = 3* w_pid_out;
 				} else{
 					w = 0.0;
 				}
