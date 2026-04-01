@@ -46,7 +46,7 @@ volatile uint8_t kfs_rotate_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t KFS_angle_state = 0; // 0 - rotate up, 1 - rotate down
 volatile uint8_t KFS_grip_state = 0; //0 open, 1 close
-
+volatile uint8_t start_automation_flag = 0;
 // Alignment variables
 float target_angle = 0.0;
 float Allign_x = 0.0;
@@ -91,97 +91,209 @@ void vMotorControlTask(void *vParameters) {//read global motor pwm varible and c
 	}
 }
 
+
+//void vBoxIntakeTask(void *vParameters) {
+//	/*
+//	 * lsf1 is IR sensor at gripper
+//	 * IP2 is limit switch for opening gripper
+//	 */
+//	uint8_t closed_flag = 0;
+//	uint8_t rotate_flag = 0;
+//	uint8_t return_flag = 0;
+//	uint8_t start_opened = 0;
+//	uint8_t start_0degree = 0;
+//	uint8_t set_once = 0;
+//	uint8_t set_once1 = 0;
+//	uint8_t first_box = 1;
+//	float gripper_angle= 0.0;
+//
+//	 //start at 180degree
+//	for(;;) {
+//		if (start_automation_flag){
+//			gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
+//
+//			if(IP2 && !start_opened) { // ensure gripper is opened
+//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//					motor_pwm.BDC7_pwm = 1000;
+//					xSemaphoreGive(xMotorMutex);
+//				}
+//			} else {
+//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//					if (!set_once) {
+//						motor_pwm.BDC7_pwm = 0;
+//						set_once = 1;
+//						start_opened = 1;
+//						closed_flag = 0;
+//					}
+//					xSemaphoreGive(xMotorMutex);
+//				}
+//			}
+//
+//			if(gripper_angle > -180.0 && !start_0degree) { // ensure gripper is 0degree
+//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//					motor_pwm.BDC8_pwm = 500;
+//					xSemaphoreGive(xMotorMutex);
+//				}
+//			} else {
+//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//					if (!set_once1) {
+//						motor_pwm.BDC8_pwm = 0;
+//						set_once1 = 1;
+//						start_0degree = 1;
+//					}
+//					xSemaphoreGive(xMotorMutex);
+//				}
+//			}
+//
+//			if(lsf1 && start_opened && start_0degree) {  // IR detected
+//
+//				// STATE 1: Close Gripper
+//				if (!closed_flag) {
+//					if(lsfl2) {
+//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//							motor_pwm.BDC7_pwm = -1000;
+//							xSemaphoreGive(xMotorMutex);
+//						}
+//					} else {
+//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//							motor_pwm.BDC7_pwm = 0;
+//							xSemaphoreGive(xMotorMutex);
+//						}
+//						closed_flag = 1;
+//						rotate_flag = 1;
+//					}
+//				}
+//
+//				// STATE 2: Rotate Gripper Upwards
+//				else if (rotate_flag && first_box) {
+//
+//					if(gripper_angle < -40.0) { // Keep rotating up
+//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//							motor_pwm.BDC8_pwm = -500;
+//							xSemaphoreGive(xMotorMutex);
+//						}
+//					} else {
+//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+//							motor_pwm.BDC8_pwm = 0;
+//							xSemaphoreGive(xMotorMutex);
+//						}
+//						return_flag = 1;
+//						rotate_flag = 0;
+//						start_opened = 0;
+//						set_once = 0;
+//					}
+//				}
+//
+//				// STATE 3: Rotate Gripper Downwards
+//				else if (return_flag && first_box) {
+//					start_0degree = 0;
+//					return_flag = 0;
+//					first_box = 0;
+//					set_once1 = 0;
+//				}
+//			}
+//		}
+//
+//		vTaskDelay(pdMS_TO_TICKS(50));
+//	}
+//}
+
+
+typedef enum {
+    STATE_INIT_OPEN,
+    STATE_INIT_ROTATE_DOWN,
+    STATE_WAIT_FOR_BOX,
+    STATE_CLOSE_GRIPPER,
+    STATE_ROTATE_UP,
+    STATE_DONE
+} AutomationState_t;
+
 void vBoxIntakeTask(void *vParameters) {
-	/*
-	 * lsf1 is IR sensor at gripper
-	 * IP2 is limit switch for opening gripper
-	 */
-	uint8_t closed_flag = 0;
-	uint8_t rotate_flag = 0;
-	uint8_t return_flag = 0;
-	uint8_t start_opened = 0;
-	uint8_t set_once = 0;
-	uint8_t first_box = 1;
-	float gripper_angle;
-	for(;;) {
+    AutomationState_t current_state = STATE_INIT_OPEN;
+    float gripper_angle = 0.0;
+    uint8_t first_box =0;
 
-		if(!IP2 && !start_opened) { // ensure gripper is opened
-			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC7_pwm = 1000;
-				xSemaphoreGive(xMotorMutex);
-			}
-		} else {
-			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				if (!set_once) {
-					motor_pwm.BDC7_pwm = 0;
-					set_once = 1;
-					start_opened = 1;
-				}
-				xSemaphoreGive(xMotorMutex);
-			}
-		}
+    for(;;) {
+    	gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
+        if (start_automation_flag) {
+            switch (current_state) {
+                case STATE_INIT_OPEN:
+                    if(IP2) {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC7_pwm = 1000;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                    } else {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC7_pwm = 0;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                        current_state = STATE_INIT_ROTATE_DOWN;
+                    }
+                    break;
 
-		if(lsf1 && start_opened) {  // IR detected
+                case STATE_INIT_ROTATE_DOWN:
+                    if(gripper_angle > -170.0) {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC8_pwm = 200;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                    } else {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC8_pwm = 0;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                        current_state = STATE_WAIT_FOR_BOX; // Move to next step
+                    }
+                    break;
 
-			// STATE 1: Close Gripper
-			if (!closed_flag) {
-				if(lsb1) {
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC7_pwm = -1000;
-						xSemaphoreGive(xMotorMutex);
-					}
-				} else {
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC7_pwm = 0;
-						xSemaphoreGive(xMotorMutex);
-					}
-					closed_flag = 1;
-					rotate_flag = 1;
-				}
-			}
 
-			// STATE 2: Rotate Gripper Upwards
-			else if (rotate_flag && first_box) {
-				gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
+                case STATE_WAIT_FOR_BOX:
+                    if(lsf1) {
+                        current_state = STATE_CLOSE_GRIPPER;
+                    }
+                    break;
 
-				if(gripper_angle < 140.0) { // Keep rotating up
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC8_pwm = -500;
-						xSemaphoreGive(xMotorMutex);
-					}
-				} else {
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC8_pwm = 0;
-						xSemaphoreGive(xMotorMutex);
-					}
-					return_flag = 1;
-					rotate_flag = 0;
-					start_opened = 0;
-				}
-			}
+                case STATE_CLOSE_GRIPPER:
+                    if(lsfl2) {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC7_pwm = -1000;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                    } else {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC7_pwm = 0;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                        if (!first_box) current_state = STATE_ROTATE_UP;
+                        else current_state = STATE_DONE;
+                    }
+                    break;
 
-			// STATE 3: Rotate Gripper Downwards
-			else if (return_flag && first_box) {
-				gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
+                case STATE_ROTATE_UP:
+                    if(gripper_angle < -40.0) {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC8_pwm = -500;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                    } else {
+                        if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                            motor_pwm.BDC8_pwm = 0;
+                            xSemaphoreGive(xMotorMutex);
+                        }
+                        first_box = 1;
+                        current_state = STATE_INIT_OPEN;
+                    }
+                    break;
 
-				if(gripper_angle > 0.0) {
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC8_pwm = 400;
-						xSemaphoreGive(xMotorMutex);
-					}
-				} else {
-					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-						motor_pwm.BDC8_pwm = 0;
-						xSemaphoreGive(xMotorMutex);
-					}
-					return_flag = 0;
-					first_box = 0;
-				}
-			}
-		}
+                case STATE_DONE:
 
-		vTaskDelay(pdMS_TO_TICKS(50));
-	}
+                    break;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
 /*
 void vAllignmentTask(void *pvParameters) { //for robot 1
@@ -268,10 +380,13 @@ void vControllerTask(void *pvParameters) {
 			KFS_grip_state = !KFS_grip_state;
 		}
 
-		else if ((ps4.button & L1) && !(prev_button & L1)) {	// Open and Close the Gripper SERVO 1
+		else if ((ps4.button & TOUCH) && !(prev_button & TOUCH)) {	// Open and Close the Gripper SERVO 1
 			spear_grip_state = !spear_grip_state;
 			if (spear_grip_state) ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_CLOSE);
 			else                  ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_OPEN);
+		}
+		else if ((ps4.button & R3) && !(prev_button & R3)) {	// Open and Close the Gripper SERVO 1
+			start_automation_flag = !start_automation_flag;
 		}
 
 		//SPEARHEAD SERVO 2 — PITCH  (Arrow UP / DOWN)
@@ -304,10 +419,11 @@ void vControllerTask(void *pvParameters) {
 			target_angle = angle_wrapper(ceil(target_angle / 90.0) * 90.0 - 90.0);
 		}
 
-		if (ps4.button & TOUCH) req_roller = ROLLER_SPEED;
+		if (ps4.button & L1) req_roller = ROLLER_SPEED;
 		else req_roller = 0;
 
-		/* --- BDC6: PLATFORM LIFT (Right Stick Y) --- */
+		if (ps4.button & L2) req_roller = -ROLLER_SPEED;
+		else req_roller = 0;
 
 		if (ps4.joyR_y > 0.15f) {
 			if (!IP9) req_lift = PLATFORM_SPEED; // Top Limit Switch
@@ -338,7 +454,7 @@ void vKFSGripperTask(void *pvParameters) {
 		if(kfs_rotate_flag) {
 			if (!KFS_angle_state) {
 
-				if(gripper_angle >= 140.0){
+				if(gripper_angle >= -40.0){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
 						motor_pwm.BDC8_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
@@ -351,7 +467,7 @@ void vKFSGripperTask(void *pvParameters) {
 					}
 				}
 			} else{
-				if(gripper_angle <= 0.0 ){
+				if(gripper_angle <= -180.0 ){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
 						motor_pwm.BDC8_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
@@ -369,7 +485,7 @@ void vKFSGripperTask(void *pvParameters) {
 		if(kfs_grip_flag) {
 			if (!KFS_grip_state) { //open grip
 
-				if(!IP2) {
+				if(IP2) {
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 						motor_pwm.BDC7_pwm = 1000;
 						xSemaphoreGive(xMotorMutex);
@@ -384,7 +500,7 @@ void vKFSGripperTask(void *pvParameters) {
 
 			} else { //close grip
 
-				if(!lsb1){
+				if(!lsfl2){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { //stop motor
 						motor_pwm.BDC7_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
@@ -401,10 +517,11 @@ void vKFSGripperTask(void *pvParameters) {
 		vTaskDelay(pdMS_TO_TICKS(30));
 	}
 }
-float current_angle;
+
+
 void vDriveTask(void *pvParameters) {
 	float x = 0.0, y = 0.0, w = 0.0;
-	int set_once = 1;
+	uint8_t set_once = 1;
 	float cos_t, sin_t;
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	const TickType_t xFrequency = pdMS_TO_TICKS(10);
@@ -420,7 +537,7 @@ void vDriveTask(void *pvParameters) {
 			RNSEnquire(RNS_ANGLE, &rns);
 			xSemaphoreGive(xRNSMutex);
 		}
-		current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
+		float current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
 		float rad  = current_angle * 3.1415926f/180.0f;
 		sin_t = sinf(rad);
 		cos_t = cosf(rad);
@@ -508,31 +625,24 @@ float calculateKFSGripperAngle(int32_t currentEncoderValue) {
     return angle;
 }
 
-int IR;
 void vTestTask(void *pvParameters) {
 	for(;;){
-		IR = lsf1;
 		if(!PB1){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC8_pwm = 500;
+				if(IP2) motor_pwm.BDC7_pwm = 1000;
+				else motor_pwm.BDC7_pwm = 1000;
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
 		else if(!PB2){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC8_pwm = -500;
+				motor_pwm.BDC7_pwm = -1000;
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
 		else if(!PB3){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC7_pwm = 1000;
-				xSemaphoreGive(xMotorMutex);
-			}
-		}
-		else if(!IP2){
-			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC7_pwm = -1000;
+				motor_pwm.BDC6_pwm = 15000;
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
@@ -540,6 +650,7 @@ void vTestTask(void *pvParameters) {
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 			motor_pwm.BDC8_pwm = 0;
 			motor_pwm.BDC7_pwm = 0;
+			motor_pwm.BDC6_pwm = 0;
 			xSemaphoreGive(xMotorMutex);
 			}
 		}
@@ -564,49 +675,49 @@ int main(void)
 				3,
 				NULL
 		);
-//		xTaskCreate(
-//				vBoxIntakeTask,
-//				"MotorControlTask",
-//				1024,
-//				NULL,
-//				2,
-//				NULL
-//		);
-
-//		xTaskCreate(
-//				vKFSGripperTask,
-//				"KFSGripperTask",
-//				512,
-//				NULL,
-//				2,
-//				NULL
-//		);
-//
-//		xTaskCreate(
-//				vControllerTask,
-//				"ControlTask",
-//				512,
-//				NULL,
-//				2,
-//				NULL
-//		);
-//
-//		xTaskCreate(
-//				vDriveTask,
-//				"DriveTask",
-//				1024,
-//				NULL,
-//				4,
-//				NULL
-//		);
 		xTaskCreate(
-				vTestTask,
-				"TestTask",
-				512,
+				vBoxIntakeTask,
+				"MotorControlTask",
+				1024,
 				NULL,
-				1,
+				2,
 				NULL
 		);
+
+		xTaskCreate(
+				vKFSGripperTask,
+				"KFSGripperTask",
+				512,
+				NULL,
+				2,
+				NULL
+		);
+
+		xTaskCreate(
+				vControllerTask,
+				"ControlTask",
+				512,
+				NULL,
+				2,
+				NULL
+		);
+
+		xTaskCreate(
+				vDriveTask,
+				"DriveTask",
+				512,
+				NULL,
+				4,
+				NULL
+		);
+//		xTaskCreate(
+//				vTestTask,
+//				"TestTask",
+//				512,
+//				NULL,
+//				1,
+//				NULL
+//		);
 	}
 
 	vTaskStartScheduler();
@@ -618,7 +729,7 @@ void TIM6_DAC_IRQHandler(void)
 {
 
 	if (imu_lock_flag) {
-		led1 = !led1;
+//		led1 = !led1;
 		PID(&pid_rotate);
 	}
 

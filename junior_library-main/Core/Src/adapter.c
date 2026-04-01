@@ -10,7 +10,6 @@
 char uartbuff[500];
 uint8_t mailbox = 0, buf2_flag = 0, buf2_flagC2 = 0;
 
-/************************************************/
 /*		 	 	Functions		       		  	*/
 /************************************************/
 void Initialize(){
@@ -66,7 +65,7 @@ void Initialize(){
 	//	MUXInit(&MUX, MUX1_INPUT_PIN, MUX1_S0_PIN, MUX1_S1_PIN, MUX1_S2_PIN);
 	SHIFTREGInit (&SR, NO_CASCADE, SR_SCK_PIN, SR_RCK_PIN, SR_SI_PIN);
 
-//		I2CxInit(&hi2c1,main_board_1, CLOCK_SPEED_400KHz,ENABLE);
+		I2CxInit(&hi2c1,main_board_1, CLOCK_SPEED_400KHz,ENABLE);
 	I2CX_DMA_RX_Init(&hi2c1, &hi2c1_rx_dma, main_board_1, CLOCK_SPEED_400KHz);
 	//	I2CxInit (&hi2c2,main_board_1, CLOCK_SPEED_400KHz,ENABLE);
 //	I2CxInit (&hi2c3,main_board_1, CLOCK_SPEED_100KHz,DISABLE);
@@ -77,7 +76,7 @@ void Initialize(){
 
 	UARTInit(&huart2, 9600, ENABLE, 5,0);
 	UARTInit(&huart5, 115200, ENABLE, 5,0);
-	UARTInit(&huart4, 115200, ENABLE, 5,0);
+
 	//UARTx_DMA_Rx_Init(&huart3, &hdma_usart3_rx, 7, 0);
 	//UARTx_DMA_Tx_Init(&huart3, &hdma_usart3_tx, 7, 0);
 
@@ -117,7 +116,7 @@ void Initialize(){
 	BDCInit(&BDC6, &htim5, TIM_CHANNEL_3, SHIFTREG, &(SR.cast[0]), Bit4, Bit5);
 	BDCInit(&BDC7, &htim5, TIM_CHANNEL_2, SHIFTREG, &(SR.cast[0]), Bit2, Bit3);
 	BDCInit(&BDC8, &htim5, TIM_CHANNEL_1, SHIFTREG, &(SR.cast[0]), Bit0, Bit1);
-	PSxSlaveInit(&ps4, &hi2c1);
+	PSxSlaveInit(&ps4, &hi2c2);
 
 	//	ADC_DMAxInit(&adc,&hadc2,&hdma_adc1,2,5,0);
 	//	ADC_Channel_Config(&adc,ADC_CHANNEL_10,IP16_Analog1_PIN);

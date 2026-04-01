@@ -93,9 +93,6 @@ void DebugMon_Handler(void)
 }
 */
 
-
-
-
 void TIM1_UP_TIM10_IRQHandler(void)
 {
 #ifdef USED_QEI1
@@ -174,14 +171,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Instance == TIM2) {
 		HAL_IncTick();
-		PSxConnectionHandler(&ps4);
 		//		MUXUpdate(&MUX);
-//		SHIFTREGShift(&SR);
-//		counter++;
-//		if(counter >= 300){
-//			counter = 0;
-//		}
-
+		SHIFTREGShift(&SR);
+		counter++;
+		if(counter >= 300){
+			counter = 0;
+		}
 	}
 }
 
@@ -190,18 +185,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 //	HAL_TIM_IRQHandler(&htim7);
 //}
 
-void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-	if (hi2c->Instance == ps4.hi2cps4->Instance) {
-	        PSx_SlaveHandler(&ps4);
-	    }
-}
 
 //Callback for I2C RXBuffer
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-	if (hi2c->Instance == ps4.hi2cps4->Instance) {
-		PSx_MasterHandler(&ps4);
-	}
+void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+	PSx_SlaveHandler(&ps4);
 }
+
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+	PSx_MasterHandler(&ps4);
+}
+
 
 //
 /*
@@ -212,10 +205,11 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
  * Function Return		: None
  * Function Example		: None
  */
-
 void I2C1_ER_IRQHandler(void) {
-	if (ps4.slave) {
-
+	if (ps4.master) {
+    	HAL_DMA_DeInit(&hi2c1_rx_dma);
+    	HAL_I2C_DeInit(&hi2c1);
+    	I2CX_DMA_RX_Init(&hi2c1, &hi2c1_rx_dma, main_board_1, CLOCK_SPEED_400KHz);
     	ps4.disconnected = 1;
 	}
 	HAL_I2C_ER_IRQHandler(&hi2c1);
@@ -263,7 +257,6 @@ void DMA1_Stream0_IRQHandler(void){
 
 	HAL_DMA_IRQHandler(&hi2c1_rx_dma);
 }
-
 
 
 

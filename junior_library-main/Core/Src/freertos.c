@@ -190,14 +190,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     }
 }
 }
-*/
-/* USER CODE END FunctionPrototypes */
-
-/* Private application code --------------------------------------------------*/
-/* USER CODE BEGIN Application */
-
-/* USER CODE END Application */
-
 //int32_t qei4;
 //int32_t qei1;
 //void vReadEncoderTask(void *pvParameters) {
@@ -214,5 +206,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 //
 //	}
 //}
+*/
+/* USER CODE END FunctionPrototypes */
+
+/* Private application code --------------------------------------------------*/
+/* USER CODE BEGIN Application */
+
+/* USER CODE END Application */
+
+
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
