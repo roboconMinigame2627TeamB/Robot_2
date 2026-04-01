@@ -189,6 +189,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 //Callback for I2C RXBuffer
 void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 	PSx_SlaveHandler(&ps4);
+	led4 = !led4;
 }
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {

@@ -94,7 +94,6 @@ void Initialize(){
 //	PWMTimeBaseInit(&htim3, 2000, 35);
 //	PWMChannelConfig(&htim3, TIM_CHANNEL_3, TIM3_CHANNEL3_PIN);
 //	PWMChannelConfig(&htim3, TIM_CHANNEL_4 , TIM3_CHANNEL4_PIN);
-
 	PWMTimeBaseInit(&htim5, 2000, 88);
 	PWMChannelConfig(&htim5, TIM_CHANNEL_1, TIM5_CHANNEL1_PIN);
 	PWMChannelConfig(&htim5, TIM_CHANNEL_2, TIM5_CHANNEL2_PIN);
@@ -105,8 +104,8 @@ void Initialize(){
 	PWMChannelConfig(&htim9, TIM_CHANNEL_1, TIM9_CHANNEL1_PIN);
 	PWMChannelConfig(&htim9, TIM_CHANNEL_2, TIM9_CHANNEL2_PIN);
 
-	ServoxInit(&servo1, &htim3, GPIOB, GPIO_PIN_1, TIM_CHANNEL_4);
-	ServoxInit(&servo2, &htim3, GPIOB, GPIO_PIN_0, TIM_CHANNEL_3);
+	ServoxInit(&Servo_SpearGrip, &htim3, GPIOB, GPIO_PIN_1, TIM_CHANNEL_4); //XH1
+	ServoxInit(&Servo_SpearPitch, &htim3, GPIOB, GPIO_PIN_0, TIM_CHANNEL_3); //XH2
 
 //	BDCInit(&BDC1, &htim3, TIM_CHANNEL_4, SHIFTREG, &(SR.cast[1]), Bit6, Bit7);
 //	BDCInit(&BDC2, &htim3, TIM_CHANNEL_3, SHIFTREG, &(SR.cast[1]), Bit4, Bit5);
@@ -116,7 +115,7 @@ void Initialize(){
 	BDCInit(&BDC6, &htim5, TIM_CHANNEL_3, SHIFTREG, &(SR.cast[0]), Bit4, Bit5);
 	BDCInit(&BDC7, &htim5, TIM_CHANNEL_2, SHIFTREG, &(SR.cast[0]), Bit2, Bit3);
 	BDCInit(&BDC8, &htim5, TIM_CHANNEL_1, SHIFTREG, &(SR.cast[0]), Bit0, Bit1);
-	PSxSlaveInit(&ps4, &hi2c2);
+	PSxSlaveInit(&ps4, &hi2c1);
 
 	//	ADC_DMAxInit(&adc,&hadc2,&hdma_adc1,2,5,0);
 	//	ADC_Channel_Config(&adc,ADC_CHANNEL_10,IP16_Analog1_PIN);

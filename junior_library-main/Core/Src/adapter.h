@@ -193,7 +193,7 @@ Srv_Drv_t srv_drv;
 Mov_Ave_t mov_l_r,mov_l_l;
 STP_t step1;
 STP_t step2;
-SERVO_t servo1, servo2;
+SERVO_t Servo_SpearGrip, Servo_SpearPitch;
 
 #ifdef mainboard3_3
 #define PB1			GPIOB_IN->bit5

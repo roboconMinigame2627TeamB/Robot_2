@@ -10,10 +10,10 @@
  * @brief  The application entry point.
  * @retval int
  */
-SERVO_t Servo_SpearGrip, Servo_SpearPitch;
+
 
 #define PLATFORM_SPEED          15000   // PWM for platform lift  (0–20000)
-#define ROLLER_SPEED            18000   // PWM for KFS ejection   (0–20000)
+#define ROLLER_SPEED            15000   // PWM for KFS ejection   (0–20000)
 
 #define SPEAR_GRIP_OPEN         30      // Servo 1: open angle  (degrees)
 #define SPEAR_GRIP_CLOSE        150     // Servo 1: close angle (degrees)
@@ -41,7 +41,6 @@ float angle_wrapper(float angle);
 //Flags
 
 volatile uint8_t imu_lock_flag = 1;
-volatile uint8_t p_lock_flag = 0;
 volatile uint8_t kfs_rotate_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t KFS_angle_state = 0; // 0 - rotate up, 1 - rotate down
@@ -475,7 +474,7 @@ void vKFSGripperTask(void *pvParameters) {
 					kfs_rotate_flag = 0;
 				} else{
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // rotate gripper downwards
-						motor_pwm.BDC8_pwm = 500;
+						motor_pwm.BDC8_pwm = 200;
 						xSemaphoreGive(xMotorMutex);
 					}
 				}
@@ -521,6 +520,7 @@ void vKFSGripperTask(void *pvParameters) {
 
 void vDriveTask(void *pvParameters) {
 	float x = 0.0, y = 0.0, w = 0.0;
+	float y_world,x_world;
 	uint8_t set_once = 1;
 	float cos_t, sin_t;
 	TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -529,7 +529,11 @@ void vDriveTask(void *pvParameters) {
 	for(;;) {
 
 		if (fabs(ps4.joyL_x) > 0.1 || fabs(ps4.joyL_y) > 0.1 || fabs(ps4.joyR_x) > 0.1) {
-			x = ps4.joyL_x; y = ps4.joyL_y; w = ps4.joyR_x;
+			w = ps4.joyR_x;
+			x_world = ps4.joyL_x;
+			y_world = ps4.joyL_y;
+			x =  x_world * cos_t + y_world * sin_t;
+			y = -x_world * sin_t + y_world * cos_t;
 		} else {
 			x = 0.0; y = 0.0; w =0.0;
 		}
@@ -547,16 +551,8 @@ void vDriveTask(void *pvParameters) {
 			set_once = 0;
 		}
 
-		if(p_lock_flag){
-			float x_world = x;
-			float y_world = y;
-			x =  x_world * cos_t + y_world * sin_t;
-			y = -x_world * sin_t + y_world * cos_t;
-		}
-
 		if (imu_lock_flag) {
 			error_val = -1 * angle_wrapper(target_angle - current_angle);
-
 			if (fabs(ps4.joyR_x) > 0.1){
 
 				w = ps4.joyR_x;
@@ -624,17 +620,19 @@ float calculateKFSGripperAngle(int32_t currentEncoderValue) {
 
     return angle;
 }
+int push1 = 0;
 
 void vTestTask(void *pvParameters) {
 	for(;;){
+		push1 = PB1;
 		if(!PB1){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				if(IP2) motor_pwm.BDC7_pwm = 1000;
+				if(PB2) motor_pwm.BDC7_pwm = 1000;
 				else motor_pwm.BDC7_pwm = 1000;
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
-		else if(!PB2){
+		else if(!IP2){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 				motor_pwm.BDC7_pwm = -1000;
 				xSemaphoreGive(xMotorMutex);
@@ -658,7 +656,24 @@ void vTestTask(void *pvParameters) {
 	}
 }
 
+void vServoInitTask(void *pvParameters) {
+	for(;;){
 
+		if(!PB1){
+			ServoSetAngle(&Servo_SpearGrip, 30);
+		}
+		else if(!PB2){
+			ServoSetAngle(&Servo_SpearGrip, 70);
+		}
+		else if(!PB3){
+			 ServoSetAngle(&Servo_SpearPitch, 90);
+		}
+		else if(!IP2){
+			 ServoSetAngle(&Servo_SpearPitch, 0);
+		}
+		vTaskDelay(pdMS_TO_TICKS(100));
+	}
+}
 
 int main(void)
 {
@@ -718,6 +733,14 @@ int main(void)
 //				1,
 //				NULL
 //		);
+//		xTaskCreate(
+//						vServoInitTask,
+//						"ServoInitTask",
+//						512,
+//						NULL,
+//						1,
+//						NULL
+//				);
 	}
 
 	vTaskStartScheduler();
