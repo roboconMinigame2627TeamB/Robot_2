@@ -151,7 +151,7 @@ void ServoSetPulse(SERVO_t* servo, uint32_t pulse){
 
 void ServoInitAngle(SERVO_t* servo, uint32_t pulse0degree , uint32_t pulse180degree){
 	servo->SERVO_pulse0degree = pulse0degree;
-	servo->SERVO_pulse1degree = (uint32_t)((pulse180degree - pulse0degree)/270);
+	servo->SERVO_pulse1degree = (uint32_t)((pulse180degree - pulse0degree)/180);
 }
 
 /*

@@ -10,20 +10,16 @@
  * @brief  The application entry point.
  * @retval int
  */
-//imu lock tune
-//test prespective
-//platform moto
-//roller moto
 
+#define PLATFORM_SPEED          20000   // PWM for platform lift  (0–20000)
+#define ROLLER_SPEED            20000   // PWM for KFS ejection   (0–20000)
 
-#define PLATFORM_SPEED          15000   // PWM for platform lift  (0–20000)
-#define ROLLER_SPEED            15000   // PWM for KFS ejection   (0–20000)
+#define SPEAR_GRIP_OPEN         0      // Servo 1: open angle  (degrees)
+#define SPEAR_GRIP_CLOSE        90     // Servo 1: close angle (degrees)
 
-#define SPEAR_GRIP_OPEN         30      // Servo 1: open angle  (degrees)
-#define SPEAR_GRIP_CLOSE        150     // Servo 1: close angle (degrees)
+#define SPEAR_PITCH_UP          0      // Servo 2: raised angle (degrees)
+#define SPEAR_PITCH_FLAT        90       // Servo 2: flat angle   (degrees)
 
-#define SPEAR_PITCH_UP          90      // Servo 2: raised angle (degrees)
-#define SPEAR_PITCH_FLAT        0       // Servo 2: flat angle   (degrees)
 
 /* Function Prototypes for Tasks */
 //void vReadEncoderTask(void *pvParameters);
@@ -43,13 +39,13 @@ float calculateKFSGripperAngle(int32_t currentEncoderValue);
 float angle_wrapper(float angle);
 
 //Flags
-
 volatile uint8_t imu_lock_flag = 1;
 volatile uint8_t kfs_rotate_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t KFS_angle_state = 0; // 0 - rotate up, 1 - rotate down
 volatile uint8_t KFS_grip_state = 0; //0 open, 1 close
 volatile uint8_t start_automation_flag = 0;
+
 // Alignment variables
 float target_angle = 0.0;
 float Allign_x = 0.0;
@@ -57,13 +53,12 @@ float Allign_y = 0.0;
 float Allign_w = 0.0;
 
 //float a,b,c,d,x,y;
-//char buffer[120];
-
+char buffer[120];
 
 //pwm variables
 typedef struct {
-	int32_t BDC5_pwm; //Platform rollers
-	int32_t BDC6_pwm; //Platform lift
+	int32_t BDC5_pwm; //Platform rollers +left, - right
+	int32_t BDC6_pwm; //Platform lift + down, - up
 	int32_t BDC7_pwm; //KFS gripper open/close + open, - close
 	int32_t BDC8_pwm; //KFS gripper rotation + down, - up
 } MotorSpeeds_t;
@@ -94,114 +89,6 @@ void vMotorControlTask(void *vParameters) {//read global motor pwm varible and c
 	}
 }
 
-
-//void vBoxIntakeTask(void *vParameters) {
-//	/*
-//	 * lsf1 is IR sensor at gripper
-//	 * IP2 is limit switch for opening gripper
-//	 */
-//	uint8_t closed_flag = 0;
-//	uint8_t rotate_flag = 0;
-//	uint8_t return_flag = 0;
-//	uint8_t start_opened = 0;
-//	uint8_t start_0degree = 0;
-//	uint8_t set_once = 0;
-//	uint8_t set_once1 = 0;
-//	uint8_t first_box = 1;
-//	float gripper_angle= 0.0;
-//
-//	 //start at 180degree
-//	for(;;) {
-//		if (start_automation_flag){
-//			gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
-//
-//			if(IP2 && !start_opened) { // ensure gripper is opened
-//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//					motor_pwm.BDC7_pwm = 1000;
-//					xSemaphoreGive(xMotorMutex);
-//				}
-//			} else {
-//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//					if (!set_once) {
-//						motor_pwm.BDC7_pwm = 0;
-//						set_once = 1;
-//						start_opened = 1;
-//						closed_flag = 0;
-//					}
-//					xSemaphoreGive(xMotorMutex);
-//				}
-//			}
-//
-//			if(gripper_angle > -180.0 && !start_0degree) { // ensure gripper is 0degree
-//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//					motor_pwm.BDC8_pwm = 500;
-//					xSemaphoreGive(xMotorMutex);
-//				}
-//			} else {
-//				if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//					if (!set_once1) {
-//						motor_pwm.BDC8_pwm = 0;
-//						set_once1 = 1;
-//						start_0degree = 1;
-//					}
-//					xSemaphoreGive(xMotorMutex);
-//				}
-//			}
-//
-//			if(lsf1 && start_opened && start_0degree) {  // IR detected
-//
-//				// STATE 1: Close Gripper
-//				if (!closed_flag) {
-//					if(lsfl2) {
-//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//							motor_pwm.BDC7_pwm = -1000;
-//							xSemaphoreGive(xMotorMutex);
-//						}
-//					} else {
-//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//							motor_pwm.BDC7_pwm = 0;
-//							xSemaphoreGive(xMotorMutex);
-//						}
-//						closed_flag = 1;
-//						rotate_flag = 1;
-//					}
-//				}
-//
-//				// STATE 2: Rotate Gripper Upwards
-//				else if (rotate_flag && first_box) {
-//
-//					if(gripper_angle < -40.0) { // Keep rotating up
-//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//							motor_pwm.BDC8_pwm = -500;
-//							xSemaphoreGive(xMotorMutex);
-//						}
-//					} else {
-//						if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-//							motor_pwm.BDC8_pwm = 0;
-//							xSemaphoreGive(xMotorMutex);
-//						}
-//						return_flag = 1;
-//						rotate_flag = 0;
-//						start_opened = 0;
-//						set_once = 0;
-//					}
-//				}
-//
-//				// STATE 3: Rotate Gripper Downwards
-//				else if (return_flag && first_box) {
-//					start_0degree = 0;
-//					return_flag = 0;
-//					first_box = 0;
-//					set_once1 = 0;
-//				}
-//			}
-//		}
-//
-//		vTaskDelay(pdMS_TO_TICKS(50));
-//	}
-//}
-
-
 typedef enum {
 	STATE_INIT_OPEN,
     STATE_INIT_ROTATE_DOWN,
@@ -219,6 +106,13 @@ void vBoxIntakeTask(void *vParameters) {
     for(;;) {
     	gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
         if (start_automation_flag) {
+        	led5 = 1;
+
+        	if(ps4.button & L3) {
+        		first_box = 0;
+        		current_state = STATE_INIT_OPEN;
+        	}
+
             switch (current_state) {
                 case STATE_INIT_OPEN:
                     if(IP2) {
@@ -236,7 +130,7 @@ void vBoxIntakeTask(void *vParameters) {
                     break;
 
                 case STATE_INIT_ROTATE_DOWN:
-                    if(gripper_angle > -170.0) {
+                    if(gripper_angle > -180.0) {
                         if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
                             motor_pwm.BDC8_pwm = 200;
                             xSemaphoreGive(xMotorMutex);
@@ -353,91 +247,86 @@ void vTelemetryTask(void *pvParameters) {
 }
  */
 
-
-
 void vControllerTask(void *pvParameters) {
 
 	uint16_t prev_button = 0;
-	uint8_t spear_grip_state   = 1;  // 1 = grip is open, 0 = closed
+	uint8_t spear_grip_state = 1;  // 1 = grip is open, 0 = closed
+	uint8_t spear_angle_state = 1;  // 1 = spear is raised, 0 = flat
+	uint16_t raw_lift_encoder = 0;
+	int32_t absolute_lift_encoder= 0;
+	int16_t prev_encoder_val = 0;
+	ServoInitAngle(&Servo_SpearGrip, 500 , 2500);
+	ServoInitAngle(&Servo_SpearPitch, 500 , 2500);
 
 	for(;;) {
+		raw_lift_encoder = QEIRead(QEI2);
+		int16_t delta = (int16_t)(raw_lift_encoder - prev_encoder_val);
+		absolute_lift_encoder += delta;
+		prev_encoder_val = raw_lift_encoder;
+
 		ps4.button = ps4.buf1 | (ps4.buf2 << 8) | (ps4.buf3 << 16);
 		int32_t req_roller = 0;
 		int32_t req_lift = 0;
 
 		if (ps4.button & PS) { // Emergency Button
 			RNSStop(&rns);
-			NVIC_SystemReset(); }
+//			NVIC_SystemReset();
+			}
 
-//		else if ((ps4.button & TRIANGLE) && !(prev_button & TRIANGLE)) p_lock_flag = !p_lock_flag;	// Toggle Per. Control
+		else if ((ps4.button & CROSS) && !(prev_button & CROSS)) {	// Open and Close the Gripper SERVO 1
+			if (spear_grip_state) ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_CLOSE);
+			else                  ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_OPEN);
+			spear_grip_state = !spear_grip_state;
+		}
 
-		else if ((ps4.button & CROSS) && !(prev_button & CROSS)) imu_lock_flag = !imu_lock_flag;	// Toggle IMU_LOCK
+		else if ((ps4.button & TRIANGLE) && !(prev_button & TRIANGLE)){
+			if (spear_angle_state) ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_FLAT);
+			else                   ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_UP);
+			spear_angle_state = !spear_angle_state;
+		}
 
-		else if ((ps4.button & SQUARE) && !(prev_button & SQUARE)) {	// Open and Close the Gripper SERVO 1
+		else if ((ps4.button & SQUARE) && !(prev_button & SQUARE)) {
+
 			kfs_rotate_flag = 1;
 			KFS_angle_state = !KFS_angle_state;
 		}
 
-		else if ((ps4.button & CIRCLE) && !(prev_button & CIRCLE)) {	// Open and Close the Gripper SERVO 1
+		else if ((ps4.button & CIRCLE) && !(prev_button & CIRCLE)) {
 			kfs_grip_flag = 1;
 			KFS_grip_state = !KFS_grip_state;
 		}
 
-		else if ((ps4.button & TOUCH) && !(prev_button & TOUCH)) {	// Open and Close the Gripper SERVO 1
-			spear_grip_state = !spear_grip_state;
-			if (spear_grip_state) ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_CLOSE);
-			else                  ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_OPEN);
-		}
 		else if ((ps4.button & R3) && !(prev_button & R3)) {	// Open and Close the Gripper SERVO 1
 			start_automation_flag = !start_automation_flag;
 		}
 
-		//SPEARHEAD SERVO 2 — PITCH  (Arrow UP / DOWN)
-		else if ((ps4.button & UP) && !(prev_button & UP)) ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_UP);
-
-		else if ((ps4.button & DOWN) && !(prev_button & DOWN)) ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_FLAT);
-
 		else if ((ps4.button & RIGHT) && !(prev_button & RIGHT)) {
-			if (!imu_lock_flag) {
-				imu_lock_flag = 1;
-				if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
-					RNSEnquire(RNS_ANGLE, &rns);
-					xSemaphoreGive(xRNSMutex);
-				}
-
-				target_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
-			}
 			target_angle = angle_wrapper(floor(target_angle / 90.0) * 90.0 + 90.0);
 		}
 
 		else if ((ps4.button & LEFT) && !(prev_button & LEFT)) {
-			if (!imu_lock_flag) {
-				imu_lock_flag = 1;
-				if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
-					RNSEnquire(RNS_ANGLE, &rns);
-					xSemaphoreGive(xRNSMutex);
-				}
-				target_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
-			}
 			target_angle = angle_wrapper(ceil(target_angle / 90.0) * 90.0 - 90.0);
 		}
 
-		if (ps4.button & L1) req_roller = ROLLER_SPEED;
+		if (ps4.button & L1) req_roller = ROLLER_SPEED; //left out
+		else if (ps4.button & R1) req_roller = -ROLLER_SPEED; //right out
 		else req_roller = 0;
 
-		if (ps4.button & L2) req_roller = -ROLLER_SPEED;
-		else req_roller = 0;
-
-		if (ps4.joyR_y > 0.15f) {
-			if (!IP9) req_lift = PLATFORM_SPEED; // Top Limit Switch
-			else req_lift = 0;
+		if (ps4.button & DOWN) {//go down
+			if (absolute_lift_encoder > 0) {
+				req_lift = PLATFORM_SPEED;
+			} else {
+				req_lift = 0;
+			}
 		}
-		else if (ps4.joyR_y < -0.15f) {
-			//  IP10 is Bottom Limit Switch
-			if (!IP10) req_lift = -PLATFORM_SPEED;
-
-			else req_lift = 0;
+		else if (ps4.button & UP) { //go up
+			if (absolute_lift_encoder < 80000) {
+				req_lift = -PLATFORM_SPEED;
+			} else {
+				req_lift = 0;
+			}
 		}
+		else req_lift = 0;
 
 		if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
 			motor_pwm.BDC5_pwm = req_roller;
@@ -470,7 +359,7 @@ void vKFSGripperTask(void *pvParameters) {
 					}
 				}
 			} else{
-				if(gripper_angle <= -180.0 ){
+				if(gripper_angle <= -175.0 ){
 					if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) { // stop rotating gripper
 						motor_pwm.BDC8_pwm = 0;
 						xSemaphoreGive(xMotorMutex);
@@ -521,7 +410,6 @@ void vKFSGripperTask(void *pvParameters) {
 	}
 }
 
-
 void vDriveTask(void *pvParameters) {
 	float x = 0.0, y = 0.0, w = 0.0;
 	float y_world,x_world;
@@ -531,22 +419,20 @@ void vDriveTask(void *pvParameters) {
 	const TickType_t xFrequency = pdMS_TO_TICKS(10);
 
 	for(;;) {
-
-
 		if( xSemaphoreTake( xRNSMutex, portMAX_DELAY ) == pdTRUE ) {
-					RNSEnquire(RNS_ANGLE, &rns);
-					xSemaphoreGive(xRNSMutex);
-				}
+			RNSEnquire(RNS_ANGLE, &rns);
+			xSemaphoreGive(xRNSMutex);
+		}
 
 		float current_angle = angle_wrapper(rns.RNS_data.common_buffer[0].data);
 
 		if(set_once){
-					target_angle = current_angle;
-					set_once = 0;
-				}
+			target_angle = current_angle;
+			set_once = 0;
+		}
 
 		float rad  = current_angle * 3.1415926f/180.0f;
-		float diff = fmod(target_angle-current_angle+180,360) - 180;
+
 		sin_t = sinf(rad);
 		cos_t = cosf(rad);
 
@@ -566,8 +452,6 @@ void vDriveTask(void *pvParameters) {
 
 				w = ps4.joyR_x;
 				target_angle = current_angle;
-
-
 			} else {
 				if(fabs(error_val) > 2.0) {
 					w = 3* w_pid_out;
@@ -605,10 +489,7 @@ void vDriveTask(void *pvParameters) {
 		}
 		vTaskDelayUntil(&xLastWakeTime, xFrequency);
 	}
-
-
 }
-
 
 float calculateKFSGripperAngle(int32_t currentEncoderValue) {
     if (isInitialized == 0) {
@@ -629,27 +510,26 @@ float calculateKFSGripperAngle(int32_t currentEncoderValue) {
 
     return angle;
 }
-int push1 = 0;
+
 
 void vTestTask(void *pvParameters) {
 	for(;;){
-		push1 = PB1;
+
 		if(!PB1){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				if(PB2) motor_pwm.BDC7_pwm = 1000;
-				else motor_pwm.BDC7_pwm = 1000;
+				motor_pwm.BDC5_pwm = 10000; //left
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
-		else if(!IP2){
+		else if(!PB2){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC7_pwm = -1000;
+				motor_pwm.BDC5_pwm = -10000; //right
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
 		else if(!PB3){
 			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-				motor_pwm.BDC6_pwm = 15000;
+				motor_pwm.BDC6_pwm = 15000; //down
 				xSemaphoreGive(xMotorMutex);
 			}
 		}
@@ -658,6 +538,7 @@ void vTestTask(void *pvParameters) {
 			motor_pwm.BDC8_pwm = 0;
 			motor_pwm.BDC7_pwm = 0;
 			motor_pwm.BDC6_pwm = 0;
+			motor_pwm.BDC5_pwm = 0;
 			xSemaphoreGive(xMotorMutex);
 			}
 		}
@@ -665,30 +546,131 @@ void vTestTask(void *pvParameters) {
 	}
 }
 
+
+
 void vServoInitTask(void *pvParameters) {
+
 	for(;;){
 
 		if(!PB1){
-			ServoSetAngle(&Servo_SpearGrip, 30);
+			ServoSetAngle(&Servo_SpearGrip, 0); //open grip
 		}
 		else if(!PB2){
-			ServoSetAngle(&Servo_SpearGrip, 70);
+			ServoSetAngle(&Servo_SpearGrip, 90); //close grip
 		}
 		else if(!PB3){
-			 ServoSetAngle(&Servo_SpearPitch, 90);
+			 ServoSetAngle(&Servo_SpearPitch, 90); //move down
 		}
 		else if(!IP2){
-			 ServoSetAngle(&Servo_SpearPitch, 0);
+			 ServoSetAngle(&Servo_SpearPitch, 0); //move up
 		}
 		vTaskDelay(pdMS_TO_TICKS(100));
 	}
 }
+
+//volatile float aw = 0.0, bw = 0.0, cw = 0.0, dw = 0.0;
+//volatile float kp = 0.0, ki = 0.0, kd = 0.0;
+//volatile int mode = 2;
+//volatile int tune_finish = 0;
+//
+////char buffer[64];
+//char rx_buf[64];
+//volatile uint8_t rx_idx = 0;
+//volatile uint8_t cmd_ready = 0;
+//uint8_t uart5_rx;
+////
+
+//void process_command() {
+//    if (!cmd_ready) return;
+//
+//    char cmd = rx_buf[0];
+//    float val = atof((char*)&rx_buf[1]); // Convert everything after the first char to float
+//
+//    switch(cmd) {
+//        case 'v': case 'V':
+//        	aw = val;
+//        	bw = val;
+//        	cw = val;
+//        	dw = val;
+//            RNSVelocity(aw, bw, cw, dw, &rns);
+//            break;
+//        case 'p': case 'P':
+//            kp = val;
+//
+//
+//            RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
+//
+//            break;
+//        case 'i': case 'I':
+//            ki = val;
+//
+//
+//            RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
+//
+//            break;
+//        case 'd': case 'D':
+//            kd = val;
+//
+//
+//            RNSSet(&rns, RNS_B_RIGHT_VEL_PID, kp, ki, kd);
+//
+//            break;
+//        case 'n': case 'N': // Send 'n' to advance to the Next motor
+//            mode++;
+//            aw = 0; bw = 0; cw = 0; dw = 0; // Stop previous motor
+//            RNSVelocity(aw, bw, cw, dw, &rns);
+//
+//            if(mode > 3) {
+//                mode = 0;
+//                tune_finish = 1;
+//            }
+//            break;
+//    }
+//    rx_idx = 0;
+//    cmd_ready = 0;
+//}
+//
+//float actual_V = 0.0;
+//float target_V = 0.0;
+//
+//void tune_motor() {
+//    uint32_t last_call = 0;
+//    tune_finish = 0;
+//    mode = 0;
+//    HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+//
+//    aw = 0; bw = 0; cw = 0; dw = 0;
+//    RNSVelocity(1.0, 1.0, 1.0, 1.0, &rns);
+//    while(!tune_finish) {
+//        process_command();
+//        uint32_t now = HAL_GetTick();
+//        if (now - last_call >= 1) {
+//
+//        	RNSEnquire(RNS_POS_BOTH, &rns);
+//
+//            if (mode == 0)      { actual_V = rns.RNS_data.common_buffer[0].data; target_V = aw; }
+//            else if (mode == 1) { actual_V = rns.RNS_data.common_buffer[1].data; target_V = bw; }
+//            else if (mode == 2) { actual_V = rns.RNS_data.common_buffer[2].data; target_V = cw; }
+//            else if (mode == 3) { actual_V = rns.RNS_data.common_buffer[3].data; target_V = dw; }
+//
+//            sprintf(buffer, "%.2f,%.2f\r\n", actual_V, target_V);
+////            sprintf(buffer, "%.2f,%.2f,%.2f,%.2f\r\n", rns.RNS_data.common_buffer[0].data,rns.RNS_data.common_buffer[1].data,rns.RNS_data.common_buffer[2].data,rns.RNS_data.common_buffer[3].data);
+//            UARTPrintString(&huart5, buffer);
+//
+//            last_call = now;
+//        }
+//    }
+//    RNSStop(&rns);
+//}
+
+
 
 int main(void)
 {
 	set();
 	xRNSMutex   = xSemaphoreCreateMutex();
 	xMotorMutex = xSemaphoreCreateMutex();
+
 
 	if (xMotorMutex != NULL && xRNSMutex != NULL) {
 		xTaskCreate(
@@ -743,15 +725,15 @@ int main(void)
 //				NULL
 //		);
 //		xTaskCreate(
-//						vServoInitTask,
-//						"ServoInitTask",
-//						512,
-//						NULL,
-//						1,
-//						NULL
-//				);
+//				vServoInitTask,
+//				"ServoInitTask",
+//				512,
+//				NULL,
+//				1,
+//				NULL
+//		);
 	}
-
+//
 	vTaskStartScheduler();
 
 	while(1){}
@@ -795,6 +777,45 @@ void TIM6_DAC_IRQHandler(void)
 /**
  * @brief  This function is executed in case of error occurrence.
  */
+// Place this in your main.c (or wherever your user callbacks are defined)
+//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+//    // Check if the interrupt was triggered by UART5
+//    if (huart->Instance == UART5) {
+//
+//        // Look for end-of-line characters (Enter key: Carriage Return or Line Feed)
+//        if (uart5_rx == '\r' || uart5_rx == '\n') {
+//
+//            // Make sure we actually received data (prevents double-triggering on \r\n)
+//            if (rx_idx > 0) {
+//                rx_buf[rx_idx] = '\0'; // Null-terminate the buffer so atof() works correctly
+//                cmd_ready = 1;         // Signal process_command() to run
+//            }
+//
+//        } else {
+//            // Append the new character to the buffer
+//            // We check against 63 to leave room for the '\0' terminator (buffer is 64)
+//            if (rx_idx < 63) {
+//                rx_buf[rx_idx] = uart5_rx;
+//                rx_idx++;
+//            }
+//        }
+//
+//        // Re-arm the interrupt to listen for the next single byte
+//        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+//    }
+//}
+
+//void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+//    // If the UART crashes due to an Overrun Error (or any error),
+//    // force it to clear the error and restart the receive interrupt.
+//    if (huart->Instance == UART5) {
+//        // Clear the Overrun error flag (syntax might vary slightly based on STM32F4 family)
+//        __HAL_UART_CLEAR_OREFLAG(huart);
+//
+//        // Restart the interrupt
+//        HAL_UART_Receive_IT(&huart5, &uart5_rx, 1);
+//    }
+//}
 
 void Error_Handler(void)
 {
