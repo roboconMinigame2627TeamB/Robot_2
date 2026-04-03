@@ -14,7 +14,7 @@ void set(void) {
 	TIMxInit(&htim2, 20000, 84, 5, 0);//20ms
 	RNS_config(&hcan1);
 	PIDSourceInit(&error_val, &w_pid_out, &pid_rotate);
-	PIDGainInit(0.02, 1.0, 1.0/180.0, 1.0, 2.6, 0.0, 1.0, 100.0, &pid_rotate);
+	PIDGainInit(0.02, 1.0, 1.0/180.0, 1.0, 1.5, 0.0, 1.1, 100.0, &pid_rotate);
 	PIDDelayInit(&pid_rotate);
 
 	MODNRobotBaseInit(MODN_FWD_OMNI, 2.0, 0.0, &Modn);
