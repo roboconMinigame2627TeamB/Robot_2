@@ -18,7 +18,7 @@
 #define SPEAR_GRIP_CLOSE        90     // Servo 1: close angle (degrees)
 
 #define SPEAR_PITCH_UP          0      // Servo 2: raised angle (degrees)
-#define SPEAR_PITCH_FLAT        90       // Servo 2: flat angle   (degrees)
+#define SPEAR_PITCH_FLAT        140       // Servo 2: flat angle   (degrees)
 
 
 /* Function Prototypes for Tasks */
@@ -67,10 +67,12 @@ SemaphoreHandle_t xMotorMutex = NULL;
 SemaphoreHandle_t xRNSMutex = NULL;
 
 typedef enum {
+	START_ROTATE,
 	STATE_INIT_OPEN,
     STATE_INIT_ROTATE_DOWN,
     STATE_WAIT_FOR_BOX,
     STATE_CLOSE_GRIPPER,
+	STATE_SHAKE_BOX,
     STATE_ROTATE_UP,
     STATE_DONE
 } AutomationState_t;
@@ -99,10 +101,11 @@ void vMotorControlTask(void *vParameters) {//read global motor pwm varible and c
 
 
 void vBoxIntakeTask(void *vParameters) {
-    AutomationState_t current_state = STATE_INIT_OPEN;
+    AutomationState_t current_state = START_ROTATE;
     float gripper_angle = 0.0;
     uint8_t first_box =0;
-
+    uint8_t rotate_once = 0;
+    uint8_t shake_once = 0;
     for(;;) {
     	gripper_angle = calculateKFSGripperAngle(QEIRead(QEI1));
         if (start_automation_flag) {
@@ -114,6 +117,15 @@ void vBoxIntakeTask(void *vParameters) {
         	}
 
             switch (current_state) {
+            	case START_ROTATE:
+            		if(!rotate_once){
+						rotate_once = 1;
+						ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_FLAT);
+						target_angle = angle_wrapper(target_angle - 90.0);
+            		}
+            		current_state = STATE_INIT_OPEN;
+            		break;
+
                 case STATE_INIT_OPEN:
                     if(IP2) {
                         if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
@@ -162,15 +174,24 @@ void vBoxIntakeTask(void *vParameters) {
                             motor_pwm.BDC7_pwm = 0;
                             xSemaphoreGive(xMotorMutex);
                         }
-                        if (!first_box) current_state = STATE_ROTATE_UP;
+                        if (!first_box) current_state = STATE_SHAKE_BOX;
                         else current_state = STATE_DONE;
                     }
                     break;
+                case STATE_SHAKE_BOX:
+                	if(!shake_once){
+                		target_angle = angle_wrapper(target_angle - 90.0);
+                		vTaskDelay(pdMS_TO_TICKS(4000));
+                		shake_once = 1;
+
+                	}
+                	current_state = STATE_ROTATE_UP;
+                	break;
 
                 case STATE_ROTATE_UP:
                     if(gripper_angle < -40.0) {
                         if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
-                            motor_pwm.BDC8_pwm = -500;
+                            motor_pwm.BDC8_pwm = -600;
                             xSemaphoreGive(xMotorMutex);
                         }
                     } else {
@@ -251,10 +272,12 @@ void vControllerTask(void *pvParameters) {
 
 	uint16_t prev_button = 0;
 	uint8_t spear_grip_state = 1;  // 1 = grip is open, 0 = closed
-	uint8_t spear_angle_state = 1;  // 1 = spear is raised, 0 = flat
+	uint8_t spear_angle_state = 0;  // 1 = spear is raised, 0 = flat
 //	uint16_t raw_lift_encoder = 0;
 //	int32_t absolute_lift_encoder= 0;
 //	int16_t prev_encoder_val = 0;
+	int32_t req_roller = 0;
+	int32_t req_lift = 0;
 	ServoInitAngle(&Servo_SpearGrip, 500 , 2500);
 	ServoInitAngle(&Servo_SpearPitch, 500 , 2500);
 	ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_OPEN);
@@ -267,8 +290,7 @@ void vControllerTask(void *pvParameters) {
 //		prev_encoder_val = raw_lift_encoder;
 
 		ps4.button = ps4.buf1 | (ps4.buf2 << 8) | (ps4.buf3 << 16);
-		int32_t req_roller = 0;
-		int32_t req_lift = 0;
+
 
 		if (ps4.button & PS) { // Emergency Button
 			RNSStop(&rns);
@@ -316,7 +338,6 @@ void vControllerTask(void *pvParameters) {
 
 		if (ps4.button & DOWN) {//go down
 			req_lift = PLATFORM_SPEED;
-			req_lift = 0;
 		}
 		else if (ps4.button & UP) { //go up
 			req_lift = -PLATFORM_SPEED;
