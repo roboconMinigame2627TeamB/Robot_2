@@ -20,6 +20,8 @@
 #define SPEAR_PITCH_UP          0      // Servo 2: raised angle (degrees)
 #define SPEAR_PITCH_FLAT        140       // Servo 2: flat angle   (degrees)
 
+#define LIFT_HOLD 5
+
 
 /* Function Prototypes for Tasks */
 //void vReadEncoderTask(void *pvParameters);
@@ -30,6 +32,7 @@ void vControllerTask(void *pvParameters);
 void vDriveTask(void *pvParameters);
 void vKFSGripperTask(void *pvParameters);
 void vBoxIntakeTask(void *vParameters);
+void vSpearHeadTask(void *vParameters);
 
 //Function Prototypes
 int32_t previousEncoderValue = 0;
@@ -44,6 +47,8 @@ volatile uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t KFS_angle_state = 1; // 0 - rotate up, 1 - rotate down
 volatile uint8_t KFS_grip_state = 0; //0 open, 1 close
 volatile uint8_t start_automation_flag = 0;
+static uint8_t lift_hold = 0;
+
 
 // Alignment variables
 float target_angle = 0.0;
@@ -61,6 +66,14 @@ typedef struct {
 	int32_t BDC7_pwm; //KFS gripper open/close + open, - close
 	int32_t BDC8_pwm; //KFS gripper rotation + down, - up
 } MotorSpeeds_t;
+
+typedef enum {
+	STATE_GRIP_DOWN,
+	STATE_GRIP_OPEN,
+	STATE_WAIT_FOR_HEAD,
+	STATE_GRIP_CLOSE,
+	STATE_GRIP_UP
+} GripperAuto_t;
 
 MotorSpeeds_t motor_pwm = {0, 0, 0, 0};
 SemaphoreHandle_t xMotorMutex = NULL;
@@ -128,7 +141,7 @@ void vBoxIntakeTask(void *vParameters) {
             		break;
 
                 case STATE_INIT_OPEN:
-                    if(IP2) {
+                    if(lsfb) {
                         if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
                             motor_pwm.BDC7_pwm = 1000;
                             xSemaphoreGive(xMotorMutex);
@@ -284,9 +297,82 @@ void vTelemetryTask(void *pvParameters) {
 }
  */
 
+void vSpearHeadTask(void *pvParameters)
+{
+	GripperAuto_t current_state = STATE_GRIP_DOWN;
+	uint8_t       sequence_running = 0;
+	uint32_t      state_enter_tick = 0;
+	uint32_t      prev_button_spear = 0;
+
+	for (;;) {
+		uint32_t now = xTaskGetTickCount();
+		uint32_t btn = ps4.buf1 | (ps4.buf2 << 8) | (ps4.buf3 << 16);
+
+		// Single press of TOUCH starts the sequence
+		if ((btn & TOUCH) && !(prev_button_spear & TOUCH)) {
+			if (!sequence_running) {
+				sequence_running = 1;
+				current_state    = STATE_GRIP_DOWN;
+				state_enter_tick = now;
+			}
+		}
+		prev_button_spear = btn;
+
+		if (sequence_running) {
+			switch (current_state) {
+
+			case STATE_GRIP_DOWN:
+				ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_FLAT);
+				// Wait 500 ms for servo to reach position
+				if ((now - state_enter_tick) >= pdMS_TO_TICKS(500)) {
+					current_state    = STATE_GRIP_OPEN;
+					state_enter_tick = now;
+				}
+				break;
+
+			case STATE_GRIP_OPEN:
+				ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_OPEN);
+				if ((now - state_enter_tick) >= pdMS_TO_TICKS(500)) {
+					current_state    = STATE_WAIT_FOR_HEAD;
+					state_enter_tick = now;
+				}
+				break;
+
+			case STATE_WAIT_FOR_HEAD:
+				// Wait until sensor detects spearhead in position
+				if (IP2) {
+					current_state    = STATE_GRIP_CLOSE;
+					state_enter_tick = now;
+				}
+				break;
+
+			case STATE_GRIP_CLOSE:
+				ServoSetAngle(&Servo_SpearGrip, SPEAR_GRIP_CLOSE);
+				if ((now - state_enter_tick) >= pdMS_TO_TICKS(500)) {
+					current_state    = STATE_GRIP_UP;
+					state_enter_tick = now;
+				}
+				break;
+
+			case STATE_GRIP_UP:
+				ServoSetAngle(&Servo_SpearPitch, SPEAR_PITCH_UP);
+				if ((now - state_enter_tick) >= pdMS_TO_TICKS(500)) {
+					// Sequence complete — ready for next trigger
+					sequence_running = 0;
+					current_state    = STATE_GRIP_DOWN;
+				}
+				break;
+			}
+		}
+
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+}
+
 void vControllerTask(void *pvParameters) {
 
 	uint16_t prev_button = 0;
+	int32_t last_lift = 0;
 	uint8_t spear_grip_state = 1;  // 1 = grip is open, 0 = closed
 	uint8_t spear_angle_state = 0;  // 1 = spear is raised, 0 = flat
 //	uint16_t raw_lift_encoder = 0;
@@ -353,9 +439,17 @@ void vControllerTask(void *pvParameters) {
 
 		if (ps4.button & DOWN) {//go down
 			req_lift = PLATFORM_SPEED;
+			lift_hold = LIFT_HOLD;
+			last_lift = req_lift;
 		}
 		else if (ps4.button & UP) { //go up
 			req_lift = -PLATFORM_SPEED;
+			lift_hold = LIFT_HOLD;
+			last_lift = req_lift;
+		}
+		else if (lift_hold > 0) {
+			req_lift = last_lift;
+			lift_hold--;
 		}
 		else req_lift = 0;
 
