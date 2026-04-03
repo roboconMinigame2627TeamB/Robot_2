@@ -41,7 +41,7 @@ float angle_wrapper(float angle);
 //Flags
 volatile uint8_t kfs_rotate_flag = 0; // 0 - nothing, 1 - move
 volatile uint8_t kfs_grip_flag = 0; // 0 - nothing, 1 - move
-volatile uint8_t KFS_angle_state = 0; // 0 - rotate up, 1 - rotate down
+volatile uint8_t KFS_angle_state = 1; // 0 - rotate up, 1 - rotate down
 volatile uint8_t KFS_grip_state = 0; //0 open, 1 close
 volatile uint8_t start_automation_flag = 0;
 
@@ -73,6 +73,7 @@ typedef enum {
     STATE_WAIT_FOR_BOX,
     STATE_CLOSE_GRIPPER,
 	STATE_SHAKE_BOX,
+	STATE_HOLD_BOX,
     STATE_ROTATE_UP,
     STATE_DONE
 } AutomationState_t;
@@ -175,9 +176,24 @@ void vBoxIntakeTask(void *vParameters) {
                             xSemaphoreGive(xMotorMutex);
                         }
                         if (!first_box) current_state = STATE_SHAKE_BOX;
-                        else current_state = STATE_DONE;
+                        else current_state = STATE_HOLD_BOX;
                     }
                     break;
+                case STATE_HOLD_BOX:
+                	if(gripper_angle < -90.0) {
+                		if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                			motor_pwm.BDC8_pwm = -600;
+                			xSemaphoreGive(xMotorMutex);
+                		}
+                	} else {
+                		if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+                			motor_pwm.BDC8_pwm = 0;
+                			xSemaphoreGive(xMotorMutex);
+                		}
+                		current_state = STATE_HOLD_BOX;
+                	}
+
+                		break;
                 case STATE_SHAKE_BOX:
                 	if(!shake_once){
                 		target_angle = angle_wrapper(target_angle - 90.0);
@@ -310,14 +326,13 @@ void vControllerTask(void *pvParameters) {
 		}
 
 		else if ((ps4.button & SQUARE) && !(prev_button & SQUARE)) {
-
-			kfs_rotate_flag = 1;
 			KFS_angle_state = !KFS_angle_state;
+			kfs_rotate_flag = 1;
 		}
 
 		else if ((ps4.button & CIRCLE) && !(prev_button & CIRCLE)) {
-			kfs_grip_flag = 1;
 			KFS_grip_state = !KFS_grip_state;
+			kfs_grip_flag = 1;
 		}
 
 		else if ((ps4.button & R3) && !(prev_button & R3)) {	// Open and Close the Gripper SERVO 1
@@ -552,23 +567,28 @@ float calculateKFSGripperAngle(int32_t currentEncoderValue) {
     return angle;
 }
 
-void vServoInitTask(void *pvParameters) {
+void vGripperInitTask(void *pvParameters) {
 
 	for(;;){
+		if(!PB1){ //open
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC7_pwm = 700;
+				xSemaphoreGive(xMotorMutex);
+			}
+		}
+		else if(!PB2){ //close
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC7_pwm = -700;
+				xSemaphoreGive(xMotorMutex);
+			}
+		} else {
+			if( xSemaphoreTake( xMotorMutex, portMAX_DELAY ) == pdTRUE ) {
+				motor_pwm.BDC7_pwm = 0;
+				xSemaphoreGive(xMotorMutex);
+			}
+		}
+		vTaskDelay(pdMS_TO_TICKS(50));
 
-		if(!PB1){
-			ServoSetAngle(&Servo_SpearGrip, 0); //open grip
-		}
-		else if(!PB2){
-			ServoSetAngle(&Servo_SpearGrip, 90); //close grip
-		}
-		else if(!PB3){
-			 ServoSetAngle(&Servo_SpearPitch, 90); //move down
-		}
-		else if(!IP2){
-			 ServoSetAngle(&Servo_SpearPitch, 0); //move up
-		}
-		vTaskDelay(pdMS_TO_TICKS(100));
 	}
 }
 
@@ -577,7 +597,6 @@ int main(void)
 	set();
 	xRNSMutex   = xSemaphoreCreateMutex();
 	xMotorMutex = xSemaphoreCreateMutex();
-
 
 	if (xMotorMutex != NULL && xRNSMutex != NULL) {
 		xTaskCreate(
@@ -623,14 +642,14 @@ int main(void)
 				4,
 				NULL
 		);
-//		xTaskCreate(
-//				vServoInitTask,
-//				"ServoInitTask",
-//				512,
-//				NULL,
-//				1,
-//				NULL
-//		);
+		xTaskCreate(
+				vGripperInitTask,
+				"GripperInitTask",
+				512,
+				NULL,
+				1,
+				NULL
+		);
 	}
 //
 	vTaskStartScheduler();
